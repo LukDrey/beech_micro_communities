@@ -1,5 +1,5 @@
 ####################################################################
-#         Pipeline for the processing of raw reads                 #
+#         Pipeline for the processing of algal reads               #
 ####################################################################
 
 # This pipeline was conducted on an external linux server.  
@@ -76,7 +76,6 @@ paste /your/filepath/here/renaming_R1.2.old.txt /your/filepath/here/renaming_R1.
 paste /your/filepath/here/renaming_R2.1.old.txt /your/filepath/here/renaming_R2.1.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR2.1.txt
 
 paste /your/filepath/here/renaming_R2.2.old.txt /your/filepath/here/renaming_R2.2.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR2.2.txt
-
 
 ###
 #FILE MERGING FROM THE TWO ROUNDS
@@ -173,6 +172,7 @@ primerHits <- function(primer, fn) {
     nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
     return(sum(nhits > 0))
 }
+
 # Search through all the reads and combine in a dataframe.
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
     FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
@@ -280,8 +280,6 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]),
 ###
 
 # For the algae I need to use the _prirm.fastq files. 
-
-#R SCRIPT FOR THE Algae
 
 library(dada2)
 packageVersion('dada2')

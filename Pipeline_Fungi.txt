@@ -1,5 +1,5 @@
 ####################################################################
-#         Pipeline for the processing of raw reads                 #
+#        Pipeline for the processing of fungal reads               #
 ####################################################################
 
 # This pipeline was conducted on an external linux server.  

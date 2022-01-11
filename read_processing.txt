@@ -1,0 +1,1444 @@
+####################################################################
+#         Pipeline for the processing of algal reads               #
+####################################################################
+
+# This pipeline was conducted on an external linux server.  
+# Set the filepath to the location of the raw reads. 
+cd /your/filepath/here/
+
+###
+# ADAPTER TRIMMING
+### 
+
+# We used the Adapter trimmed reads as supplied by Fasteris, the sequencing provider.
+# Trimming was done with Trimmomatic on their side.
+
+###
+#FASTQC GENERATION 
+###
+
+# Create a fastqc report of the read files, to judge the read quality.
+fastqc input.fastq.gz -o Output/Path/
+
+###
+#CREATE A FASTA FILE FROM THE BARCODES 
+###
+
+# The .txt file consisting of the octamers and primers (called barcodes from here on), 
+# used for the study was uploaded to the server before.
+
+# Take each line of the .txt of the barcodes and adds a line containing info on which sample this barcode belongs to. 
+awk '{print">fwd"NR"\n"$0}' algae_fwd_barcodes.txt > algae_barcodes.fwd.fasta 
+
+# Take each line of the .txt of the barcodes and adds a line containing info on which sample this barcode belongs to. 
+awk '{print">rev"NR"\n"$0}' algae_rev_barcodes.txt > algae_barcodes.rev.fasta 
+
+###
+#DEMULTIPLEXING THE READS WITH CUTADAPT
+###
+
+# Open a screen and activate the cutadapt environment through conda. 
+screen -S algae
+conda activate cutadaptenv 
+
+# Increase the softlimit of the OS because cutadapt will open a lot of files. 
+# One file for each forward and reverse combination. These will be filled with the reads containing the combination.
+ulimit -S -n 1600
+
+
+#Cutadapt Main Commands
+# Everything needs to be run twice because the reads are in mixed orientation,
+# because of the PCR free library preparation. 
+# Because of the dual indexing approach we need to supply to barcode files. 
+cutadapt \
+-e 0.15 --no-indels --minimum-length 50 \
+-g file:/phylodata/ldreyling/studyPrelim/data/algae_barcodes.fwd.fasta \
+-G file:/phylodata/ldreyling/studyPrelim/data/algae_barcodes.rev.fasta \
+-o {name1}-{name2}.round1.1.fastq -p {name1}-{name2}.round1.2.fastq \
+/phylodata/ldreyling/studyPrelim/data/algae/210305_SN234_A_L001_AUXV-1_AdapterTrimmed_R1.fastq.gz \
+/phylodata/ldreyling/studyPrelim/data/algae/210305_SN234_A_L001_AUXV-1_AdapterTrimmed_R2.fastq.gz > algae_round1_cutadapt.txt &&
+
+cutadapt \
+-e 0.15 --no-indels --minimum-length 50 \
+-g file:/phylodata/ldreyling/studyPrelim/data/algae_barcodes.fwd.fasta \
+-G file:/phylodata/ldreyling/studyPrelim/data/algae_barcodes.rev.fasta \
+-o {name1}-{name2}.round2.1.fastq -p {name1}-{name2}.round2.2.fastq \
+unknown-unknown.round1.2.fastq \
+unknown-unknown.round1.1.fastq > algae_round2_cutadapt.txt
+
+# Before merging the files we need to rename them to make sorting easier and only include reads that
+# are real samples, multiplex controls, blanks and PCR negative controls.
+
+paste /your/filepath/here/renaming_R1.1.old.txt /your/filepath/here/renaming_R1.1.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR1.1.txt
+
+paste /your/filepath/here/renaming_R1.2.old.txt /your/filepath/here/renaming_R1.2.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR1.2.txt
+
+paste /your/filepath/here/renaming_R2.1.old.txt /your/filepath/here/renaming_R2.1.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR2.1.txt
+
+paste /your/filepath/here/renaming_R2.2.old.txt /your/filepath/here/renaming_R2.2.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR2.2.txt
+
+###
+#FILE MERGING FROM THE TWO ROUNDS
+###
+
+# First create two lists of the filenames for the pairs from the cutadapt results. 
+
+ls -1 *round1.1.sample.fastq | sed 's/round1.1.sample.fastq//' > listround1.1.
+
+ls -1 *round2.1.sample.fastq | sed 's/round2.1.sample.fastq//' > listround2.1.
+
+# Now we can merge the pairs. First for the files from R1.   
+
+paste listround1.1. listround2.1. | while read n k; \
+do cat $n"round1.1.sample.fastq" $k"round2.1.sample.fastq" > $n"sample_demux.1.fastq"; done
+
+# And again for the R2 reads. 
+
+ls -1 *round1.2.sample.fastq | sed 's/round1.2.sample.fastq//'  > listround1.2.
+
+ls -1 *round2.2.sample.fastq | sed 's/round2.2.sample.fastq//' > listround2.2.
+
+paste listround1.2. listround2.2. | while read n k; \
+do cat $n"round1.2.sample.fastq" $k"round2.2.sample.fastq" > $n"sample_demux.2.fastq"; done
+
+# To check if the merging has worked. We take an example file and check if the read numbers match the paired file. 
+
+# Transform the fastq file to a fasta file. 
+cat 10_1.sample_demux.1.fastq | awk '{if(NR%4==1) {printf(">%s\n",substr($0,2));} else if(NR%4==2) print;}' > 10_1.sample-demux.1.fa
+
+# Grep the read numbers by counting the lines beginning with >.
+grep -c '^>' *sample*.fa | less 
+
+###
+#Removing left over primer sequences.
+###
+
+# DADA2 is best run through R. You can find tutorials at https://benjjneb.github.io/dada2/index.html. 
+# Therefore we need to initialize an R session on the server. 
+# Before moving on to the sample inference we need to remove any leftover primer sequences.
+
+R
+
+# Then we load all required packages. 
+
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Create objects that contain the primer sequences.  
+# For the algae that is:
+
+FWD <- 'CAACTCTCRRCAACGGATA'
+REV <- 'RGTTTCTTTTCCTCCGCTTA'
+
+# Make a custom function that creates all the possible orientations of the primers e.g. complement, reverse complement.
+allOrients <- function(primer) {
+  require(Biostrings)
+  # Create all orientations of the input sequence
+  dna     <- DNAString(primer)  # turn character to DNAString object
+  orients <- c(Forward=dna, Complement=complement(dna), Reverse=reverse(dna),
+               RevComp=reverseComplement(dna))
+  return(sapply(orients, toString))  # back to character vector
+}
+
+# Make and save the orientation files.
+FWD.orients <- allOrients(FWD)
+FWD.orients
+
+REV.orients <- allOrients(REV)
+REV.orients
+
+# Load in the demultiplexed files. 
+
+fnFs <- sort(list.files(path = '.', pattern = "sample_demux.1.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path = '.', pattern = "sample_demux.2.fastq", full.names = TRUE))
+
+# Filter out ambigous Ns with the filterAndTrim function setting maxN to zero.
+# Put the N-filterd files in a filtN/ subdirectory.
+fnFs.filtN <- file.path(path = '.', "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path = '.', "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+# Check for any leftover primers after the removal with Cutadapt.
+# If the samples come from the same library prep then it is enought to only process one of the files 
+# (see the [1] at the end of the command). 
+
+# Create a function that counts number of reads in which the primer is found.
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+
+# Search through all the reads and combine in a dataframe.
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+
+# A lot of primer sequences left for the fungi.
+# This is somehow expected because of a higher varability in the ITS length and therefore more read through during sequencing 	
+
+# Leave R and open the cutadapt environment.
+# Remove leftover primers with Cutadapt
+
+conda activate cutadaptenv
+
+# The command below contains all possible orientations: 
+# 1) fwd-rcrev + rev-rcfwd; 2) rcfwd-rev + rcrev-fwd; \
+# 3) fwd + rcfwd; 4) rcfwd + fwd; 5) rev + rcrev; 6) rcrev + rev
+
+# Use a for loop to run Cutadapt over all samples. 
+ls *demu*.fastq | cut -f1 -d'.' > samples
+
+for sample in $(cat samples); do
+
+echo "On sample: $sample"
+
+cutadapt --cores=0 --minimum-length 50 \
+ -a ^CAACTCTCRRCAACGGATA...TAAGCGGAGGAAAAGAAACY -A ^RGTTTCTTTTCCTCCGCTTA...TATCCGTTGYYGAGAGTTG \
+ -a ^TATCCGTTGYYGAGAGTTG...RGTTTCTTTTCCTCCGCTTA -A ^TAAGCGGAGGAAAAGAAACY...CAACTCTCRRCAACGGATA \
+ -a CAACTCTCRRCAACGGATA -A TATCCGTTGYYGAGAGTTG \
+ -a TATCCGTTGYYGAGAGTTG -A CAACTCTCRRCAACGGATA \
+ -a RGTTTCTTTTCCTCCGCTTA -A TAAGCGGAGGAAAAGAAACY \
+ -a TAAGCGGAGGAAAAGAAACY -A RGTTTCTTTTCCTCCGCTTA \
+ -o ${sample}.sample_demux_prirm.1.fastq -p ${sample}.sample_demux_prirm.2.fastq \
+ ${sample}.sample_demux.1.fastq ${sample}.sample_demux.2.fastq \
+ > cutadapt_primer_trimming_stats_{sample}.txt
+
+done 
+
+# Run a second check for primers in R.
+
+R
+
+# Then we load all required packages. 
+
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Create objects that contain the primer sequences.  
+# For the algae that is:
+
+FWD <- 'CAACTCTCRRCAACGGATA'
+REV <- 'RGTTTCTTTTCCTCCGCTTA'
+
+# Make a custom function that creates all the possible orientations of the primers e.g. complement, reverse complement.
+allOrients <- function(primer) {
+  require(Biostrings)
+  # Create all orientations of the input sequence
+  dna     <- DNAString(primer)  # turn character to DNAString object
+  orients <- c(Forward=dna, Complement=complement(dna), Reverse=reverse(dna),
+               RevComp=reverseComplement(dna))
+  return(sapply(orients, toString))  # back to character vector
+}
+
+# Make and save the orientation files.
+FWD.orients <- allOrients(FWD)
+FWD.orients
+
+REV.orients <- allOrients(REV)
+REV.orients
+
+# Load in the files with primers removed. 
+
+fnFs <- sort(list.files(path = '.', pattern = "sample_demux_prirm.1.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path = '.', pattern = "sample_demux_prirm.2.fastq", full.names = TRUE))
+
+# Filter out ambigous Ns with the filterAndTrim function setting maxN to zero.
+# Put the N-filterd files in a filtN/ subdirectory.
+fnFs.filtN <- file.path(path = '.', "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path = '.', "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+# Check for any leftover primers after the removal with Cutadapt.
+# If the samples come from the same library prep then it is enought to only process one of the files 
+# (see the [1] at the end of the command). 
+
+# Create a function that counts number of reads in which the primer is found.
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+	
+# Primer removal was successful for the algae --> ready for processing with DADA2.
+
+###
+# Sample inference with DADA2
+###
+
+# For the algae I need to use the _prirm.fastq files. 
+
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Specify the path for the primer removed files. 
+cutFs_1 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/algae/demux/dada2_processing", pattern = "_1.sample_demux_prirm.1.fastq", full.names = TRUE))
+cutRs_1 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/algae/demux/dada2_processing", pattern = "_1.sample_demux_prirm.2.fastq", full.names = TRUE))
+
+cutFs_3 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/algae/demux/dada2_processing", pattern = "_3.sample_demux_prirm.1.fastq", full.names = TRUE))
+cutRs_3 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/algae/demux/dada2_processing", pattern = "_3.sample_demux_prirm.2.fastq", full.names = TRUE))
+
+# Create a function to obtain the sample names. "_1.s" serves as the point on which the string should be split. 
+get.sample.name <- function(fname) strsplit(basename(fname), "_1.s")[[1]][1]
+
+# Get the sample names.
+sample.names <- unname(sapply(cutFs_1, get.sample.name))
+sample.names
+
+# Filter and trim the reads.
+
+# Assign names for the filtered files. 
+filtFs_1 <- file.path("/phylodata/ldreyling/studyPrelim/data/algae/demux/dada2_processing", "filtered", basename(cutFs_1))
+filtRs_1 <- file.path("/phylodata/ldreyling/studyPrelim/data/algae/demux/dada2_processing", "filtered", basename(cutRs_1))
+
+filtFs_3 <- file.path("/phylodata/ldreyling/studyPrelim/data/algae/demux/dada2_processing", "filtered", basename(cutFs_3))
+filtRs_3 <- file.path("/phylodata/ldreyling/studyPrelim/data/algae/demux/dada2_processing", "filtered", basename(cutRs_3))
+
+# Apply the filtering parameters , no truncLen because these are ITS reads
+# and therefore very variable in length, changed maxEE to 6,6 since the libraries are mixed orientation.
+out_1 <- filterAndTrim(cutFs_1, filtFs_1, cutRs_1, filtRs_1, maxN = 0, maxEE = c(6, 6), 
+    truncQ = 2, minLen = 50, rm.phix = TRUE, compress = TRUE, multithread = TRUE)
+	
+out_3 <- filterAndTrim(cutFs_3, filtFs_3, cutRs_3, filtRs_3, maxN = 0, maxEE = c(6, 6), 
+    truncQ = 2, minLen = 50, rm.phix = TRUE, compress = TRUE, multithread = TRUE)	
+
+# Learn the error rates for the R1 reads. 
+errF_1 <- learnErrors(filtFs_1, multithread = TRUE)
+
+errF_3 <- learnErrors(filtFs_3, multithread = TRUE)
+
+# Learn the error rates for the R2 reads. 
+errR_1 <- learnErrors(filtRs_1, multithread = TRUE)
+
+errR_3 <- learnErrors(filtRs_3, multithread = TRUE)
+
+# De-replicate identical reads. 
+
+derepFs_1 <- derepFastq(filtFs_1, verbose = TRUE)
+derepRs_1 <- derepFastq(filtRs_1, verbose = TRUE)
+
+derepFs_3 <- derepFastq(filtFs_3, verbose = TRUE)
+derepRs_3 <- derepFastq(filtRs_3, verbose = TRUE)
+
+# Name the derep-class objects by the sample names.
+
+names(derepFs_1) <- sample.names
+names(derepRs_1) <- sample.names
+
+names(derepFs_3) <- sample.names
+names(derepRs_3) <- sample.names
+
+# Run the DADA2 core algorithm for the sample inference. 
+dadaFs_1 <- dada(derepFs_1, err = errF_1, multithread = TRUE)
+dadaRs_1 <- dada(derepRs_1, err = errR_1, multithread = TRUE)
+
+dadaFs_3 <- dada(derepFs_3, err = errF_3, multithread = TRUE)
+dadaRs_3 <- dada(derepRs_3, err = errR_3, multithread = TRUE)
+
+# Merge the paired reads within the replications.
+mergers_1 <- mergePairs(dadaFs_1, derepFs_1, dadaRs_1, derepRs_1, verbose=TRUE)
+
+mergers_3 <- mergePairs(dadaFs_3, derepFs_3, dadaRs_3, derepRs_3, verbose=TRUE)
+
+# Construct the ASV table per replicate. 
+seqtab_1 <- makeSequenceTable(mergers_1)
+dim(seqtab_1)
+
+seqtab_3 <- makeSequenceTable(mergers_3)
+dim(seqtab_3)
+
+# Chimera removal for the replicates. 
+seqtab_1.nochim <- removeBimeraDenovo(seqtab_1, method="consensus", multithread=TRUE, verbose=TRUE)
+seqtab_3.nochim <- removeBimeraDenovo(seqtab_3, method="consensus", multithread=TRUE, verbose=TRUE)
+
+# Check for reverse complement synthetic diversity. 
+# Because the libraries are in mixed orientation we need to check for identical sequences, 
+# which are read in reverse complement.
+sq_1 <- getSequences(seqtab_1.nochim)
+sq.rc_1 <- dada2:::rc(sq_1)
+rcdupes_1 <- sapply(seq_along(sq_1), function(i) {
+    sq.rc_1[[i]] %in% sq_1[1:(i-1)]
+})
+
+sq_3 <- getSequences(seqtab_3.nochim)
+sq.rc_3 <- dada2:::rc(sq_3)
+rcdupes_3 <- sapply(seq_along(sq_3), function(i) {
+    sq.rc_3[[i]] %in% sq_3[1:(i-1)]
+})
+
+# Merge the forward and reverse-complement reads.
+colnames(seqtab_1.nochim)[rcdupes_1] <- dada2:::rc(colnames(seqtab_1.nochim)[rcdupes_1])
+stm_1 <- collapseNoMismatch(seqtab_1.nochim)
+
+colnames(seqtab_3.nochim)[rcdupes_3] <- dada2:::rc(colnames(seqtab_3.nochim)[rcdupes_3])
+stm_3 <- collapseNoMismatch(seqtab_3.nochim)
+
+# Merge the two ASV tables.
+# Put the tables in a list before merging them with mergeSequenceTables.
+input_tables <- list(stm_1, stm_3)
+
+seqtab_merge <- mergeSequenceTables(tables = input_tables, repeats = 'sum', tryRC = TRUE)
+
+# An additional run to remove chimeric sequences. 
+seqtab_merge.nochim <- removeBimeraDenovo(seqtab_merge, method="consensus", multithread=TRUE, verbose=TRUE)
+
+# Inspect the sequence lengths to look for anything that seems suspicious. Not the case here.
+table(nchar(getSequences(seqtab_merge.nochim)))
+
+# Give the sequence variants more manageable names like ASV1 etc 
+asv_seqs <- colnames(seqtab_merge.nochim)
+asv_headers <- vector(dim(seqtab_merge.nochim)[2], mode="character")
+
+for (i in 1:dim(seqtab_merge.nochim)[2]) {
+  asv_headers[i] <- paste(">ASV", i, sep="_")
+}
+
+# Make and save a fasta of our final ASV sequences.
+asv_fasta <- c(rbind(asv_headers, asv_seqs))
+write(asv_fasta, "ASVs_algae.fa")
+
+write.table(t(seqtab_merge.nochim), "asv_table_algae.txt", sep="\t")
+
+###
+# Taxonomy assignment.
+###
+
+# The taxonomy assignment for the algae is done through the freely available
+# program SEED2. It is available at http://www.biomed.cas.cz/mbu/lbwrf/seed/help.php
+
+###
+#Matchlist creation for LULU curation
+###
+
+# Exit R and make a matchlist with BLASTn.
+conda activate blastenv 
+
+# Set the filepath to the files with the DADA2 processed files.
+cd /your/filepath/here/
+
+# Create a database containing the algal ASVs in fasta format.
+makeblastdb -in ASVs_algae.fa -parse_seqids -dbtype nucl
+
+# Compare all ASVs to each other and create a match list of sequences that are similar to each other.
+blastn -db ASVs_algae.fa -outfmt '6 qseqid sseqid pident' -out match_list.txt -qcov_hsp_perc 75 -perc_identity 70 -query ASVs_algae.fa
+
+conda deactivate
+
+# Move to R on the local machine to run decontam and the LULU curation.
+
+####################################################################
+#       Pipeline for the processing of bacterial reads             #
+####################################################################
+
+# This pipeline was conducted on an external linux server.  
+# Set the filepath to the location of the raw reads. 
+cd /your/filepath/here/
+
+###
+# ADAPTER TRIMMING
+### 
+
+# We used the Adapter trimmed reads as supplied by Fasteris, the sequencing provider.
+# Trimming was done with Trimmomatic on their side.
+
+###
+#FASTQC GENERATION 
+###
+
+# Create a fastqc report of the read files, to judge the read quality.
+fastqc input.fastq.gz -o Output/Path/
+
+###
+#CREATE A FASTA FILE FROM THE BARCODES 
+###
+
+# The .txt file consisting of the octamers and primers (called barcodes from here on), 
+# used for the study was uploaded to the server before.
+
+# Take each line of the .txt of the barcodes and adds a line containing info on which sample this barcode belongs to. 
+awk '{print">fwd"NR"\n"$0}' algae_fwd_barcodes.txt > algae_barcodes.fwd.fasta 
+
+# Take each line of the .txt of the barcodes and adds a line containing info on which sample this barcode belongs to. 
+awk '{print">rev"NR"\n"$0}' algae_rev_barcodes.txt > algae_barcodes.rev.fasta 
+
+###
+#DEMULTIPLEXING THE READS WITH CUTADAPT
+###
+
+# Open a screen and activate the cutadapt environment through conda. 
+screen -S algae
+conda activate cutadaptenv 
+
+# Increase the softlimit of the OS because cutadapt will open a lot of files. 
+# One file for each forward and reverse combination. These will be filled with the reads containing the combination.
+ulimit -S -n 1600
+
+
+#Cutadapt Main Commands
+# Everything needs to be run twice because the reads are in mixed orientation,
+# because of the PCR free library preparation. 
+# Because of the dual indexing approach we need to supply to barcode files. 
+cutadapt \
+-e 0.15 --no-indels --minimum-length 50 \
+-g file:/phylodata/ldreyling/studyPrelim/data/bacteria_barcodes.fwd.fasta \
+-G file:/phylodata/ldreyling/studyPrelim/data/bacteria_barcodes.rev.fasta \
+-o {name1}-{name2}.round1.1.fastq -p {name1}-{name2}.round1.2.fastq \
+/phylodata/ldreyling/studyPrelim/data/bacteria/210305_SN6662_A_L001_AUXV-2_AdapterTrimmed_R1.fastq.gz \
+/phylodata/ldreyling/studyPrelim/data/bacteria/210305_SN6662_A_L001_AUXV-2_AdapterTrimmed_R2.fastq.gz > bacteria_round1_cutadapt.txt &&
+
+cutadapt \
+-e 0.15 --no-indels --minimum-length 50 \
+-g file:/phylodata/ldreyling/studyPrelim/data/bacteria_barcodes.fwd.fasta \
+-G file:/phylodata/ldreyling/studyPrelim/data/bacteria_barcodes.rev.fasta \
+-o {name1}-{name2}.round2.1.fastq -p {name1}-{name2}.round2.2.fastq \
+unknown-unknown.round1.2.fastq \
+unknown-unknown.round1.1.fastq > bacteria_round2_cutadapt.txt
+
+# Before merging the files we need to rename them to make sorting easier and only include reads that
+# are real samples, multiplex controls, blanks and PCR negative controls.
+
+paste /phylodata/ldreyling/studyPrelim/data/renaming_R1.1.old.txt /phylodata/ldreyling/studyPrelim/data/renaming_R1.1.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR1.1.txt
+
+paste /phylodata/ldreyling/studyPrelim/data/renaming_R1.2.old.txt /phylodata/ldreyling/studyPrelim/data/renaming_R1.2.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR1.2.txt
+
+paste /phylodata/ldreyling/studyPrelim/data/renaming_R2.1.old.txt /phylodata/ldreyling/studyPrelim/data/renaming_R2.1.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR2.1.txt
+
+paste /phylodata/ldreyling/studyPrelim/data/renaming_R2.2.old.txt /phylodata/ldreyling/studyPrelim/data/renaming_R2.2.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR2.2.txt
+
+###
+#FILE MERGING FROM THE TWO ROUNDS
+###
+
+# First create two lists of the filenames for the pairs from the cutadapt results. 
+
+ls -1 *round1.1.sample.fastq | sed 's/round1.1.sample.fastq//' > listround1.1.
+
+ls -1 *round2.1.sample.fastq | sed 's/round2.1.sample.fastq//' > listround2.1.
+
+# Now we can merge the pairs. First for the files from R1.   
+
+paste listround1.1. listround2.1. | while read n k; \
+do cat $n"round1.1.sample.fastq" $k"round2.1.sample.fastq" > $n"sample_demux.1.fastq"; done
+
+# And again for the R2 reads. 
+
+ls -1 *round1.2.sample.fastq | sed 's/round1.2.sample.fastq//'  > listround1.2.
+
+ls -1 *round2.2.sample.fastq | sed 's/round2.2.sample.fastq//' > listround2.2.
+
+paste listround1.2. listround2.2. | while read n k; \
+do cat $n"round1.2.sample.fastq" $k"round2.2.sample.fastq" > $n"sample_demux.2.fastq"; done
+
+# To check if the merging has worked. We take an example file and check if the read numbers match the paired file. 
+
+# Transform the fastq file to a fasta file. 
+cat 10_1.sample_demux.1.fastq | awk '{if(NR%4==1) {printf(">%s\n",substr($0,2));} else if(NR%4==2) print;}' > 10_1.sample-demux.1.fa
+
+# Grep the read numbers by counting the lines beginning with >.
+grep -c '^>' *sample*.fa | less 
+
+###
+#Removing left over primer sequences.
+###
+
+# DADA2 is best run through R. You can find tutorials at https://benjjneb.github.io/dada2/index.html. 
+# Therefore we need to initialize an R session on the server. 
+# Before moving on to the sample inference we need to remove any leftover primer sequences.
+
+R
+
+# Then we load all required packages. 
+
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Create objects that contain the primer sequences.  
+# For the bacteria that is:
+FWD <- 'CCTACGGGWGGCWGCAG'
+REV <- 'GACTACHVGGGTATCTAATCC'
+
+# Make a custom function that creates all the possible orientations of the primers e.g. complement, reverse complement.
+allOrients <- function(primer) {
+  require(Biostrings)
+  # Create all orientations of the input sequence
+  dna     <- DNAString(primer)  # turn character to DNAString object
+  orients <- c(Forward=dna, Complement=complement(dna), Reverse=reverse(dna),
+               RevComp=reverseComplement(dna))
+  return(sapply(orients, toString))  # back to character vector
+}
+
+# Make and save the orientation files.
+FWD.orients <- allOrients(FWD)
+FWD.orients
+
+REV.orients <- allOrients(REV)
+REV.orients
+
+# Load in the demultiplexed files. 
+fnFs <- sort(list.files(path = '.', pattern = "sample_demux.1.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path = '.', pattern = "sample_demux.2.fastq", full.names = TRUE))
+
+# Filter out ambigous Ns with the filterAndTrim function setting maxN to zero.
+# Put the N-filterd files in a filtN/ subdirectory.
+fnFs.filtN <- file.path(path = '.', "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path = '.', "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+# Check for any leftover primers after the removal with Cutadapt.
+# If the samples come from the same library prep then it is enought to only process one of the files 
+# (see the [1] at the end of the command). 
+
+# Create a function that counts number of reads in which the primer is found.
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+
+# Search through all the reads and combine in a dataframe.
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+	
+# A few primers are still left for the bacteria --> second pass through cutadapt needed. 
+
+
+# Leave R and open the cutadapt environment.
+# Remove leftover primers with Cutadapt
+
+conda activate cutadaptenv
+
+# The command below contains all possible orientations: 
+# 1) fwd-rcrev + rev-rcfwd; 2) rcfwd-rev + rcrev-fwd; \
+# 3) fwd + rcfwd; 4) rcfwd + fwd; 5) rev + rcrev; 6) rcrev + rev
+
+# Use a for loop to run Cutadapt over all samples. 
+ls *demu*.fastq | cut -f1 -d'.' > samples
+
+for sample in $(cat samples); do
+
+echo "On sample: $sample"
+
+cutadapt --cores=0 --minimum-length 50 \
+ -a ^CCTACGGGWGGCWGCAG...GGATTAGATACCCBDGTAGTC -A ^GACTACHVGGGTATCTAATCC...CTGCWGCCWCCCGTAGG \
+ -a ^CTGCWGCCWCCCGTAGG...GACTACHVGGGTATCTAATCC -A ^GGATTAGATACCCBDGTAGTC...CCTACGGGWGGCWGCAG \
+ -a CCTACGGGWGGCWGCAG -A CTGCWGCCWCCCGTAGG \
+ -a CTGCWGCCWCCCGTAGG -A CCTACGGGWGGCWGCAG \
+ -a GACTACHVGGGTATCTAATCC -A GGATTAGATACCCBDGTAGTC \
+ -a GGATTAGATACCCBDGTAGTC -A GACTACHVGGGTATCTAATCC \
+ -o ${sample}.sample_demux_prirm.1.fastq -p ${sample}.sample_demux_prirm.2.fastq \
+ ${sample}.sample_demux.1.fastq ${sample}.sample_demux.2.fastq \
+ > cutadapt_primer_trimming_stats_{sample}.txt
+
+done 
+
+# Run a second check for primers in R.
+
+R
+
+# Then we load all required packages. 
+
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Create objects that contain the primer sequences.  
+# For the bacteria that is:
+FWD <- 'CCTACGGGWGGCWGCAG'
+REV <- 'GACTACHVGGGTATCTAATCC'
+
+# Make a custom function that creates all the possible orientations of the primers e.g. complement, reverse complement.
+allOrients <- function(primer) {
+  require(Biostrings)
+  # Create all orientations of the input sequence
+  dna     <- DNAString(primer)  # turn character to DNAString object
+  orients <- c(Forward=dna, Complement=complement(dna), Reverse=reverse(dna),
+               RevComp=reverseComplement(dna))
+  return(sapply(orients, toString))  # back to character vector
+}
+
+# Make and save the orientation files.
+FWD.orients <- allOrients(FWD)
+FWD.orients
+
+REV.orients <- allOrients(REV)
+REV.orients
+
+# Load in the files with primers removed. 
+
+fnFs <- sort(list.files(path = '.', pattern = "sample_demux_prirm.1.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path = '.', pattern = "sample_demux_prirm.2.fastq", full.names = TRUE))
+
+# Filter out ambigous Ns with the filterAndTrim function setting maxN to zero
+
+fnFs.filtN <- file.path(path = '.', "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path = '.', "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+# Check for any leftover primers after the removal with Cutadapt.
+# If the samples come from the same library prep then it is enought to only process one of the files 
+# (see the [1] at the end of the command). 
+
+# Create a function that counts number of reads in which the primer is found.
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+	
+# Primer removal was successful for the bacteria --> ready for processing with DADA2
+
+###
+# Sample inference with DADA2
+###
+
+# For the fungi we need to use the _prirm2.fastq files. 
+
+# Load the required packages.
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Specify the path for the primer removed files. 
+cutFs_1 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/bacteria/demux/dada2_processing", pattern = "_1.sample_demux_prirm.1.fastq", full.names = TRUE))
+cutRs_1 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/bacteria/demux/dada2_processing", pattern = "_1.sample_demux_prirm.2.fastq", full.names = TRUE))
+
+cutFs_3 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/bacteria/demux/dada2_processing", pattern = "_3.sample_demux_prirm.1.fastq", full.names = TRUE))
+cutRs_3 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/bacteria/demux/dada2_processing", pattern = "_3.sample_demux_prirm.2.fastq", full.names = TRUE))
+
+# Create a function to obtain the sample names. "_1.s" serves as the point on which the string should be split. 
+get.sample.name <- function(fname) strsplit(basename(fname), "_1.s")[[1]][1]
+
+# Get the sample names.
+sample.names <- unname(sapply(cutFs_1, get.sample.name))
+head(sample.names)
+
+# Filter and trim the reads.
+
+# Assign names for the filtered files. 
+filtFs_1 <- file.path("/phylodata/ldreyling/studyPrelim/data/bacteria/demux/dada2_processing", "filtered", basename(cutFs_1))
+filtRs_1 <- file.path("/phylodata/ldreyling/studyPrelim/data/bacteria/demux/dada2_processing", "filtered", basename(cutRs_1))
+
+filtFs_3 <- file.path("/phylodata/ldreyling/studyPrelim/data/bacteria/demux/dada2_processing", "filtered", basename(cutFs_3))
+filtRs_3 <- file.path("/phylodata/ldreyling/studyPrelim/data/bacteria/demux/dada2_processing", "filtered", basename(cutRs_3))
+
+# Apply the filtering parameters. 
+# ATTTENTION I NEED TO CHOOSE A TRUNCATION LENGTH ACCORDING TO THE QUALITY PROFILE DROPOFF.
+# Set the maxEE to 5,5.
+out_1 <- filterAndTrim(cutFs_1, filtFs_1, cutRs_1, filtRs_1, maxN = 0, maxEE = c(5, 5), 
+    truncQ = 2, truncLen = c(250,260), rm.phix = TRUE, compress = TRUE, multithread = TRUE)
+head(out_1)
+	
+out_3 <- filterAndTrim(cutFs_3, filtFs_3, cutRs_3, filtRs_3, maxN = 0, maxEE = c(5, 5), 
+    truncQ = 2, truncLen = c(250,260), rm.phix = TRUE, compress = TRUE, multithread = TRUE)	
+head(out_3)
+
+# Learn the error rates for the R1 reads. 
+errF_1 <- learnErrors(filtFs_1, multithread = TRUE)
+
+errF_3 <- learnErrors(filtFs_3, multithread = TRUE)
+
+# Learn the error rates for the R2 reads. 
+errR_1 <- learnErrors(filtRs_1, multithread = TRUE)
+
+errR_3 <- learnErrors(filtRs_3, multithread = TRUE)
+
+# De-replicate identical reads. 
+
+derepFs_1 <- derepFastq(filtFs_1, verbose = TRUE)
+derepRs_1 <- derepFastq(filtRs_1, verbose = TRUE)
+
+derepFs_3 <- derepFastq(filtFs_3, verbose = TRUE)
+derepRs_3 <- derepFastq(filtRs_3, verbose = TRUE)
+
+# Name the derep-class objects by the sample names.
+
+names(derepFs_1) <- sample.names
+names(derepRs_1) <- sample.names
+
+names(derepFs_3) <- sample.names
+names(derepRs_3) <- sample.names
+
+# Run the DADA2 core algorithm for the sample inference. 
+dadaFs_1 <- dada(derepFs_1, err = errF_1, multithread = TRUE)
+dadaRs_1 <- dada(derepRs_1, err = errR_1, multithread = TRUE)
+
+dadaFs_3 <- dada(derepFs_3, err = errF_3, multithread = TRUE)
+dadaRs_3 <- dada(derepRs_3, err = errR_3, multithread = TRUE)
+
+# Merge the paired reads within the replications.
+mergers_1 <- mergePairs(dadaFs_1, derepFs_1, dadaRs_1, derepRs_1, verbose=TRUE)
+
+mergers_3 <- mergePairs(dadaFs_3, derepFs_3, dadaRs_3, derepRs_3, verbose=TRUE)
+
+# Construct the ASV table per replicate. 
+seqtab_1 <- makeSequenceTable(mergers_1)
+dim(seqtab_1)
+
+seqtab_3 <- makeSequenceTable(mergers_3)
+dim(seqtab_3)
+
+# Chimera removal for the replicates.
+seqtab_1.nochim <- removeBimeraDenovo(seqtab_1, method="consensus", multithread=TRUE, verbose=TRUE)
+seqtab_3.nochim <- removeBimeraDenovo(seqtab_3, method="consensus", multithread=TRUE, verbose=TRUE)
+
+# Check for reverse complement synthetic diversity. 
+# Because the libraries are in mixed orientation we need to check for identical sequences, 
+# which are read in reverse complement.
+sq_1 <- getSequences(seqtab_1.nochim)
+sq.rc_1 <- dada2:::rc(sq_1)
+rcdupes_1 <- sapply(seq_along(sq_1), function(i) {
+    sq.rc_1[[i]] %in% sq_1[1:(i-1)]
+})
+
+sq_3 <- getSequences(seqtab_3.nochim)
+sq.rc_3 <- dada2:::rc(sq_3)
+rcdupes_3 <- sapply(seq_along(sq_3), function(i) {
+    sq.rc_3[[i]] %in% sq_3[1:(i-1)]
+})
+
+# Merge the forward and reverse-complement reads.
+colnames(seqtab_1.nochim)[rcdupes_1] <- dada2:::rc(colnames(seqtab_1.nochim)[rcdupes_1])
+stm_1 <- collapseNoMismatch(seqtab_1.nochim)
+
+colnames(seqtab_3.nochim)[rcdupes_3] <- dada2:::rc(colnames(seqtab_3.nochim)[rcdupes_3])
+stm_3 <- collapseNoMismatch(seqtab_3.nochim)
+
+# Merge the two ASV tables.
+# Put the tables in a list before merging them with mergeSequenceTables.
+input_tables <- list(stm_1, stm_3)
+
+seqtab_merge <- mergeSequenceTables(tables = input_tables, repeats = 'sum', tryRC = TRUE)
+
+# An additional run to remove chimeric sequences.
+seqtab_merge.nochim <- removeBimeraDenovo(seqtab_merge, method="consensus", multithread=TRUE, verbose=TRUE)
+
+# Inspect the sequence lengths to look for anything that seems suspicious. Not the case here.
+table(nchar(getSequences(seqtab_merge.nochim)))
+
+# Give the sequence variants more manageable names like ASV1 etc 
+asv_seqs <- colnames(seqtab_merge.nochim)
+asv_headers <- vector(dim(seqtab_merge.nochim)[2], mode="character")
+
+for (i in 1:dim(seqtab_merge.nochim)[2]) {
+  asv_headers[i] <- paste(">ASV", i, sep="_")
+}
+
+# Make and save a fasta of our final ASV sequences.
+asv_fasta <- c(rbind(asv_headers, asv_seqs))
+write(asv_fasta, "ASVs_bacteria.fa")
+
+write.table(t(seqtab_merge.nochim), "asv_table_bacteria.txt", sep="\t")
+
+###
+# Taxonomy assignment.
+###
+
+# Read in the SILVA database fasta.  
+silva.ref <- './silva_nr99_v138.1_train_set.fa.gz'  
+
+# Run the taxonomy assignment on the ASV table. 
+taxa <- assignTaxonomy(seqtab_merge.nochim, silva.ref, multithread = TRUE, tryRC = TRUE)
+
+# Save the taxonomy table as an R object.
+saveRDS(taxa, 'tax_table_bacteria.rds')
+
+quit(save = 'yes')
+
+###
+#Matchlist creation for LULU curation
+###
+
+# Exit R and make a matchlist with BLASTn.
+conda activate blastenv 
+
+# Set the filepath to the files with the DADA2 processed files.
+cd /your/filepath/here/
+
+# Create a database containing the bacterial ASVs in fasta format.
+makeblastdb -in ASVs_bacteria.fa -parse_seqids -dbtype nucl
+
+# Compare all ASVs to each other and create a match list of sequences that are similar to each other.
+blastn -db ASVs_bacteria.fa -outfmt '6 qseqid sseqid pident' -out match_list.txt -qcov_hsp_perc 75 -perc_identity 70 -query ASVs_bacteria.fa
+
+conda deactivate
+
+# Move to R on the local machine to run decontam and the LULU curation.
+
+####################################################################
+#        Pipeline for the processing of fungal reads               #
+####################################################################
+
+# This pipeline was conducted on an external linux server.  
+# Set the filepath to the location of the raw reads. 
+cd /your/filepath/here/
+
+###
+# ADAPTER TRIMMING
+### 
+
+# We used the Adapter trimmed reads as supplied by Fasteris, the sequencing provider.
+# Trimming was done with Trimmomatic on their side.
+
+###
+#FASTQC GENERATION 
+###
+
+# Create a fastqc report of the read files, to judge the read quality.
+fastqc input.fastq.gz -o Output/Path/
+
+###
+#CREATE A FASTA FILE FROM THE BARCODES 
+###
+
+# The .txt file consisting of the octamers and primers (called barcodes from here on), 
+# used for the study was uploaded to the server before.
+
+# Take each line of the .txt of the barcodes and adds a line containing info on which sample this barcode belongs to. 
+awk '{print">fwd"NR"\n"$0}' algae_fwd_barcodes.txt > algae_barcodes.fwd.fasta 
+
+# Take each line of the .txt of the barcodes and adds a line containing info on which sample this barcode belongs to. 
+awk '{print">rev"NR"\n"$0}' algae_rev_barcodes.txt > algae_barcodes.rev.fasta 
+
+###
+#DEMULTIPLEXING THE READS WITH CUTADAPT
+###
+
+# Open a screen and activate the cutadapt environment through conda. 
+screen -S fungi
+conda activate cutadaptenv 
+
+# Increase the softlimit of the OS because cutadapt will open a lot of files. 
+# One file for each forward and reverse combination. These will be filled with the reads containing the combination.
+ulimit -S -n 1600
+
+#Cutadapt Main Commands
+# Everything needs to be run twice because the reads are in mixed orientation,
+# because of the PCR free library preparation. 
+# Because of the dual indexing approach we need to supply to barcode files. 
+cutadapt \
+-e 0.15 --no-indels --minimum-length 50 \
+-g file:/phylodata/ldreyling/studyPrelim/data/fungi_barcodes.fwd.fasta \
+-G file:/phylodata/ldreyling/studyPrelim/data/fungi_barcodes.rev.fasta \
+-o {name1}-{name2}.round1.1.fastq -p {name1}-{name2}.round1.2.fastq \
+/phylodata/ldreyling/studyPrelim/data/fungi/210308_SN1126_A_L001_AUXV-3_AdapterTrimmed_R1.fastq.gz \
+/phylodata/ldreyling/studyPrelim/data/fungi/210308_SN1126_A_L001_AUXV-3_AdapterTrimmed_R2.fastq.gz > fungi_round1_cutadapt.txt &&
+
+cutadapt \
+-e 0.15 --no-indels --minimum-length 50 \
+-g file:/phylodata/ldreyling/studyPrelim/data/fungi_barcodes.fwd.fasta \
+-G file:/phylodata/ldreyling/studyPrelim/data/fungi_barcodes.rev.fasta \
+-o {name1}-{name2}.round2.1.fastq -p {name1}-{name2}.round2.2.fastq \
+unknown-unknown.round1.2.fastq \
+unknown-unknown.round1.1.fastq > fungi_round2_cutadapt.txt 
+
+# Before merging the files we need to rename them to make sorting easier and only include reads that
+# are real samples, multiplex controls, blanks and PCR negative controls.
+
+paste /phylodata/ldreyling/studyPrelim/data/renaming_R1.1.old.txt /phylodata/ldreyling/studyPrelim/data/renaming_R1.1.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR1.1.txt
+
+paste /phylodata/ldreyling/studyPrelim/data/renaming_R1.2.old.txt /phylodata/ldreyling/studyPrelim/data/renaming_R1.2.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR1.2.txt
+
+paste /phylodata/ldreyling/studyPrelim/data/renaming_R2.1.old.txt /phylodata/ldreyling/studyPrelim/data/renaming_R2.1.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR2.1.txt
+
+paste /phylodata/ldreyling/studyPrelim/data/renaming_R2.2.old.txt /phylodata/ldreyling/studyPrelim/data/renaming_R2.2.new.txt | while read n k; do rename -v $n $k * ; done > ./rename_logR2.2.txt
+
+###
+#FILE MERGING FROM THE TWO ROUNDS
+###
+
+# First create two lists of the filenames for the pairs from the cutadapt results. 
+
+ls -1 *round1.1.sample.fastq | sed 's/round1.1.sample.fastq//' > listround1.1.
+
+ls -1 *round2.1.sample.fastq | sed 's/round2.1.sample.fastq//' > listround2.1.
+
+# Now we can merge the pairs. First for the files from R1.   
+
+paste listround1.1. listround2.1. | while read n k; \
+do cat $n"round1.1.sample.fastq" $k"round2.1.sample.fastq" > $n"sample_demux.1.fastq"; done
+
+# And again for the R2 reads.
+
+ls -1 *round1.2.sample.fastq | sed 's/round1.2.sample.fastq//'  > listround1.2.
+
+ls -1 *round2.2.sample.fastq | sed 's/round2.2.sample.fastq//' > listround2.2.
+
+paste listround1.2. listround2.2. | while read n k; \
+do cat $n"round1.2.sample.fastq" $k"round2.2.sample.fastq" > $n"sample_demux.2.fastq"; done
+
+# To check if the merging has worked. We take an example file and check if the read numbers match the paired file. 
+
+# Transform the fastq file to a fasta file. 
+cat 10_1.sample_demux.1.fastq | awk '{if(NR%4==1) {printf(">%s\n",substr($0,2));} else if(NR%4==2) print;}' > 10_1.sample-demux.1.fa
+
+# Grep the read numbers by counting the lines beginning with >.
+grep -c '^>' *sample*.fa | less 
+
+###
+#Removing left over primer sequences.
+###
+
+# DADA2 is best run through R. You can find tutorials at https://benjjneb.github.io/dada2/index.html. 
+# Therefore we need to initialize an R session on the server. 
+# Before moving on to the sample inference we need to remove any leftover primer sequences.
+
+R
+
+# Then we load all required packages. 
+
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Create objects that contain the primer sequences.  
+# For the fungi that is:
+FWD <- 'GTGARTCATCGAATCTTTG'
+REV <- 'TCCTCCGCTTATTGATATGC'
+
+# Make a custom function that creates all the possible orientations of the primers e.g. complement, reverse complement.
+allOrients <- function(primer) {
+  require(Biostrings)
+  # Create all orientations of the input sequence
+  dna     <- DNAString(primer)  # turn character to DNAString object
+  orients <- c(Forward=dna, Complement=complement(dna), Reverse=reverse(dna),
+               RevComp=reverseComplement(dna))
+  return(sapply(orients, toString))  # back to character vector
+}
+
+# Make and save the orientation files.
+FWD.orients <- allOrients(FWD)
+FWD.orients
+
+REV.orients <- allOrients(REV)
+REV.orients
+
+# Load in the demultiplexed files. 
+fnFs <- sort(list.files(path = '.', pattern = "sample_demux.1.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path = '.', pattern = "sample_demux.2.fastq", full.names = TRUE))
+
+# Filter out ambigous Ns with the filterAndTrim function setting maxN to zero.
+# Put the N-filterd files in a filtN/ subdirectory.
+fnFs.filtN <- file.path(path = '.', "filtN", basename(fnFs)) 
+fnRs.filtN <- file.path(path = '.', "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+# Check for any leftover primers after the removal with Cutadapt.
+# If the samples come from the same library prep then it is enought to only process one of the files 
+# (see the [1] at the end of the command). 
+
+# Create a function that counts number of reads in which the primer is found.
+primerHits <- function(primer, fn) {
+        nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+
+# Search through all the reads and combine in a dataframe.
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+	
+# A lot of primer sequences left for the fungi.
+# This is somehow expected because of a higher varability in the ITS length and therefore more read through during sequencing 	
+
+# Leave R and open the cutadapt environment.
+# Remove leftover primers with Cutadapt
+
+conda activate cutadaptenv
+
+# The command below contains all possible orientations: 
+# 1) fwd-rcrev + rev-rcfwd; 2) rcfwd-rev + rcrev-fwd; \
+# 3) fwd + rcfwd; 4) rcfwd + fwd; 5) rev + rcrev; 6) rcrev + rev
+
+# Use a for loop to run Cutadapt over all samples. 
+ls *demu*.fastq | cut -f1 -d'.' > samples
+
+for sample in $(cat samples); do
+
+echo "On sample: $sample"
+
+cutadapt --cores=0 \
+ -a ^GTGARTCATCGAATCTTTG...GCATATCAATAAGCGGAGGA -A ^TCCTCCGCTTATTGATATGC...CAAAGATTCGATGAYTCAC \
+ -a ^CAAAGATTCGATGAYTCAC...TCCTCCGCTTATTGATATGC -A ^GCATATCAATAAGCGGAGGA...GTGARTCATCGAATCTTTG \
+ -a GTGARTCATCGAATCTTTG -A CAAAGATTCGATGAYTCAC \
+ -a CAAAGATTCGATGAYTCAC -A GTGARTCATCGAATCTTTG \
+ -a TCCTCCGCTTATTGATATGC -A GCATATCAATAAGCGGAGGA \
+ -a GCATATCAATAAGCGGAGGA -A TCCTCCGCTTATTGATATGC \
+ -o ${sample}.sample_demux_prirm.1.fastq -p ${sample}.sample_demux_prirm.2.fastq \
+ ${sample}.sample_demux.1.fastq ${sample}.sample_demux.2.fastq \
+ > cutadapt_primer_trimming_stats_{sample}.txt
+
+done 
+
+# Run a second check for primers in R.
+
+R
+
+# Load required packages. 
+
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Create objects that contain the primer sequences.  
+# For the fungi that is:
+FWD <- 'GTGARTCATCGAATCTTTG'
+REV <- 'TCCTCCGCTTATTGATATGC'
+
+# Make a custom function that creates all the possible orientations of the primers e.g. complement, reverse complement.
+allOrients <- function(primer) {
+  require(Biostrings)
+  # Create all orientations of the input sequence
+  dna     <- DNAString(primer)  # turn character to DNAString object
+  orients <- c(Forward=dna, Complement=complement(dna), Reverse=reverse(dna),
+               RevComp=reverseComplement(dna))
+  return(sapply(orients, toString))  # back to character vector
+}
+
+# Make and save the orientation files.
+FWD.orients <- allOrients(FWD)
+FWD.orients
+
+REV.orients <- allOrients(REV)
+REV.orients
+
+# Load in the files with primers removed. 
+
+fnFs <- sort(list.files(path = '.', pattern = "sample_demux_prirm.1.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path = '.', pattern = "sample_demux_prirm.2.fastq", full.names = TRUE))
+
+# Filter out ambigous Ns with the filterAndTrim function setting maxN to zero.
+
+fnFs.filtN <- file.path(path = '.', "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path = '.', "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+# Check for any leftover primers after the removal with Cutadapt.
+# If the samples come from the same library prep then it is enought to only process one of the files 
+# (see the [1] at the end of the command). 
+
+# Create a function that counts number of reads in which the primer is found.
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+
+# Search through all the reads and combine in a dataframe.
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+	
+# Primer removal was not completely successful for fungi. Run Cutadapt again. 
+
+# Leave R and open the cutadapt environment.
+# Remove leftover primers with Cutadapt
+
+conda activate cutadaptenv
+
+# The command below contains all possible orientations: 
+# 1) fwd-rcrev + rev-rcfwd; 2) rcfwd-rev + rcrev-fwd; \
+# 3) fwd + rcfwd; 4) rcfwd + fwd; 5) rev + rcrev; 6) rcrev + rev
+
+# Use a for loop to run Cutadapt over all samples. 
+
+ls *demu*prirm*.fastq | cut -f1 -d'.' > samples
+
+for sample in $(cat samples); do
+
+echo "On sample: $sample"
+
+cutadapt --cores=0 \
+ -a ^GTGARTCATCGAATCTTTG...GCATATCAATAAGCGGAGGA -A ^TCCTCCGCTTATTGATATGC...CAAAGATTCGATGAYTCAC \
+ -a ^CAAAGATTCGATGAYTCAC...TCCTCCGCTTATTGATATGC -A ^GCATATCAATAAGCGGAGGA...GTGARTCATCGAATCTTTG \
+ -a GTGARTCATCGAATCTTTG -A CAAAGATTCGATGAYTCAC \
+ -a CAAAGATTCGATGAYTCAC -A GTGARTCATCGAATCTTTG \
+ -a TCCTCCGCTTATTGATATGC -A GCATATCAATAAGCGGAGGA \
+ -a GCATATCAATAAGCGGAGGA -A TCCTCCGCTTATTGATATGC \
+ -o ${sample}.sample_demux_prirm2.1.fastq -p ${sample}.sample_demux_prirm2.2.fastq \
+ ${sample}.sample_demux_prirm.1.fastq ${sample}.sample_demux_prirm.2.fastq \
+ > cutadapt_primer_trimming_stats_{sample}.txt
+
+done 
+
+# Run a third check for primers in R.
+
+# Load the required packages. 
+
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Create objects that contain the primer sequences.  
+# For the fungi that is:
+FWD <- 'GTGARTCATCGAATCTTTG'
+REV <- 'TCCTCCGCTTATTGATATGC'
+
+# Make a custom function that creates all the possible orientations of the primers e.g. complement, reverse complement.
+allOrients <- function(primer) {
+  require(Biostrings)
+  # Create all orientations of the input sequence
+  dna     <- DNAString(primer)  # turn character to DNAString object
+  orients <- c(Forward=dna, Complement=complement(dna), Reverse=reverse(dna),
+               RevComp=reverseComplement(dna))
+  return(sapply(orients, toString))  # back to character vector
+}
+
+# Make and save the orientation files.
+FWD.orients <- allOrients(FWD)
+FWD.orients
+
+REV.orients <- allOrients(REV)
+REV.orients
+
+# Load in the files with primers removed. 
+
+fnFs <- sort(list.files(path = '.', pattern = "sample_demux_prirm2.1.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path = '.', pattern = "sample_demux_prirm2.2.fastq", full.names = TRUE))
+
+# Filter out ambigous Ns with the filterAndTrim function setting maxN to zero
+
+fnFs.filtN <- file.path(path = '.', "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path = '.', "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+# Check for any leftover primers after the removal with Cutadapt.
+# If the samples come from the same library prep then it is enought to only process one of the files 
+# (see the [1] at the end of the command). 
+
+# Create a function that counts number of reads in which the primer is found.
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+	
+# Primer removal was successful for the fungi now --> ready for processing in DADA2. 	
+
+###
+# Sample inference with DADA2
+###
+
+# For the fungi we need to use the _prirm2.fastq files. 
+
+# Load the required packages.
+library(dada2)
+packageVersion('dada2')
+library(ShortRead)
+packageVersion('ShortRead')
+library(Biostrings)
+packageVersion('Biostrings')
+
+# Specify the path for the primer removed files. 
+cutFs_1 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/fungi/demux/dada2_processing", pattern = "_1.sample_demux_prirm2.1.fastq", full.names = TRUE))
+cutRs_1 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/fungi/demux/dada2_processing", pattern = "_1.sample_demux_prirm2.2.fastq", full.names = TRUE))
+
+cutFs_3 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/fungi/demux/dada2_processing", pattern = "_3.sample_demux_prirm2.1.fastq", full.names = TRUE))
+cutRs_3 <- sort(list.files("/phylodata/ldreyling/studyPrelim/data/fungi/demux/dada2_processing", pattern = "_3.sample_demux_prirm2.2.fastq", full.names = TRUE))
+
+# Create a function to obtain the sample names. "_1.s" serves as the point on which the string should be split. 
+get.sample.name <- function(fname) strsplit(basename(fname), "_1.s")[[1]][1]
+
+# Get the sample names.
+sample.names <- unname(sapply(cutFs_1, get.sample.name))
+sample.names
+
+# Filter and trim the reads.
+
+# Assign names for the filtered files. 
+filtFs_1 <- file.path("/phylodata/ldreyling/studyPrelim/data/fungi/demux/dada2_processing", "filtered", basename(cutFs_1))
+filtRs_1 <- file.path("/phylodata/ldreyling/studyPrelim/data/fungi/demux/dada2_processing", "filtered", basename(cutRs_1))
+
+filtFs_3 <- file.path("/phylodata/ldreyling/studyPrelim/data/fungi/demux/dada2_processing", "filtered", basename(cutFs_3))
+filtRs_3 <- file.path("/phylodata/ldreyling/studyPrelim/data/fungi/demux/dada2_processing", "filtered", basename(cutRs_3))
+
+# Apply the filtering parameters , no truncLen because these are ITS reads
+# and therefore very variable in length, changed maxEE to 6,6 since the libraries are mixed orientation.
+out_1 <- filterAndTrim(cutFs_1, filtFs_1, cutRs_1, filtRs_1, maxN = 0, maxEE = c(6, 6), 
+    truncQ = 2, minLen = 50, rm.phix = TRUE, compress = TRUE, multithread = TRUE)
+	
+out_3 <- filterAndTrim(cutFs_3, filtFs_3, cutRs_3, filtRs_3, maxN = 0, maxEE = c(6, 6), 
+    truncQ = 2, minLen = 50, rm.phix = TRUE, compress = TRUE, multithread = TRUE)	
+
+# Learn the error rates for the R1 reads. 
+errF_1 <- learnErrors(filtFs_1, multithread = TRUE)
+
+errF_3 <- learnErrors(filtFs_3, multithread = TRUE)
+
+# Learn the error rates for the R2 reads. 
+errR_1 <- learnErrors(filtRs_1, multithread = TRUE)
+
+errR_3 <- learnErrors(filtRs_3, multithread = TRUE)
+
+# De-replicate identical reads. 
+
+derepFs_1 <- derepFastq(filtFs_1, verbose = TRUE)
+derepRs_1 <- derepFastq(filtRs_1, verbose = TRUE)
+
+derepFs_3 <- derepFastq(filtFs_3, verbose = TRUE)
+derepRs_3 <- derepFastq(filtRs_3, verbose = TRUE)
+
+# Name the derep-class objects by the sample names.
+
+names(derepFs_1) <- sample.names
+names(derepRs_1) <- sample.names
+
+names(derepFs_3) <- sample.names
+names(derepRs_3) <- sample.names
+
+# Run the DADA2 core algorithm for the sample inference. 
+dadaFs_1 <- dada(derepFs_1, err = errF_1, multithread = TRUE)
+dadaRs_1 <- dada(derepRs_1, err = errR_1, multithread = TRUE)
+
+dadaFs_3 <- dada(derepFs_3, err = errF_3, multithread = TRUE)
+dadaRs_3 <- dada(derepRs_3, err = errR_3, multithread = TRUE)
+
+# Merge the paired reads within the replications.
+mergers_1 <- mergePairs(dadaFs_1, derepFs_1, dadaRs_1, derepRs_1, verbose=TRUE)
+
+mergers_3 <- mergePairs(dadaFs_3, derepFs_3, dadaRs_3, derepRs_3, verbose=TRUE)
+
+# Construct the ASV table per replicate.
+seqtab_1 <- makeSequenceTable(mergers_1)
+dim(seqtab_1)
+
+seqtab_3 <- makeSequenceTable(mergers_3)
+dim(seqtab_3)
+
+# Chimera removal for the replicates. 
+seqtab_1.nochim <- removeBimeraDenovo(seqtab_1, method="consensus", multithread=TRUE, verbose=TRUE)
+seqtab_3.nochim <- removeBimeraDenovo(seqtab_3, method="consensus", multithread=TRUE, verbose=TRUE)
+
+# Check for reverse complement synthetic diversity. 
+# Because the libraries are in mixed orientation we need to check for identical sequences, 
+# which are read in reverse complement.
+sq_1 <- getSequences(seqtab_1.nochim)
+sq.rc_1 <- dada2:::rc(sq_1)
+rcdupes_1 <- sapply(seq_along(sq_1), function(i) {
+    sq.rc_1[[i]] %in% sq_1[1:(i-1)]
+})
+
+sq_3 <- getSequences(seqtab_3.nochim)
+sq.rc_3 <- dada2:::rc(sq_3)
+rcdupes_3 <- sapply(seq_along(sq_3), function(i) {
+    sq.rc_3[[i]] %in% sq_3[1:(i-1)]
+})
+
+# Merge the forward and reverse-complement reads.
+colnames(seqtab_1.nochim)[rcdupes_1] <- dada2:::rc(colnames(seqtab_1.nochim)[rcdupes_1])
+stm_1 <- collapseNoMismatch(seqtab_1.nochim)
+
+colnames(seqtab_3.nochim)[rcdupes_3] <- dada2:::rc(colnames(seqtab_3.nochim)[rcdupes_3])
+stm_3 <- collapseNoMismatch(seqtab_3.nochim)
+
+
+# Merge the two ASV tables.
+# Put the tables in a list before merging them with mergeSequenceTables.
+input_tables <- list(stm_1, stm_3)
+
+seqtab_merge <- mergeSequenceTables(tables = input_tables, repeats = 'sum', tryRC = TRUE)
+
+
+# An additional run to remove chimeric sequences. 
+seqtab_merge.nochim <- removeBimeraDenovo(seqtab_merge, method="consensus", multithread=TRUE, verbose=TRUE)
+
+# Inspect the sequence lengths to look for anything that seems suspicious. Not the case here.
+table(nchar(getSequences(seqtab_merge.nochim)))
+
+# Give the sequence variants more manageable names like ASV1 etc 
+asv_seqs <- colnames(seqtab_merge.nochim)
+asv_headers <- vector(dim(seqtab_merge.nochim)[2], mode="character")
+
+for (i in 1:dim(seqtab_merge.nochim)[2]) {
+  asv_headers[i] <- paste(">ASV", i, sep="_")
+}
+
+# Make and save a fasta of our final ASV sequences.
+asv_fasta <- c(rbind(asv_headers, asv_seqs))
+write(asv_fasta, "ASVs_fungi.fa")
+
+write.table(t(seqtab_merge.nochim), "asv_table_fungi.txt", sep="\t")
+
+###
+# Taxonomy assignment.
+###
+
+# Read in the unite database fasta.  
+unite.ref <- './sh_general_release_dynamic_s_04.02.2020.fasta'  
+
+# Run the taxonomy assignment on the ASV table. 
+taxa <- assignTaxonomy(seqtab_merge.nochim, unite.ref, multithread = TRUE, tryRC = TRUE)
+
+# Save the taxonomy table as an R object.
+saveRDS(taxa, 'tax_table_fungi.rds')
+
+quit(save = 'yes')
+
+###
+#Matchlist creation for LULU curation
+###
+
+# Exit R and make a matchlist with BLASTn.
+conda activate blastenv 
+
+# Set the filepath to the files with the DADA2 processed files.
+cd /your/filepath/here/
+
+# Create a database containing the fungal ASVs in fasta format.
+makeblastdb -in ASVs_fungi.fa -parse_seqids -dbtype nucl
+
+# Compare all ASVs to each other and create a match list of sequences that are similar to each other.
+blastn -db ASVs_fungi.fa -outfmt '6 qseqid sseqid pident' -out match_list.txt -qcov_hsp_perc 75 -perc_identity 70 -query ASVs_fungi.fa
+
+conda deactivate
+
+# Move to R on the local machine to run decontam and the LULU curation.
+
