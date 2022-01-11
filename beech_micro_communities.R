@@ -4,4 +4,1349 @@
 ##         (fungi, algae, bacteria) on the bark of beech trees         ##
 #########################################################################
 
-# This is the code accompanying the 
+# This is the code accompanying the analysis for our Paper
+# in Frontiers in Forests and Global Change - Temperate and Boreal Forests.
+
+
+#################################################################
+##                          Section 1                          ##
+##                       Package Loading                       ##
+#################################################################
+
+library(here); packageVersion("here")
+
+library(dplyr); packageVersion("dplyr")
+
+library(decontam); packageVersion("decontam")
+
+library(phyloseq); packageVersion("phyloseq")
+
+library(ggplot2); packageVersion("ggplot2")
+
+library(lulu); packageVersion("lulu")
+
+library(Biostrings); packageVersion("Biostrings")
+
+library(microbiome); packageVersion("microbiome")
+
+
+##----------------------------------------------------------------
+##                        Custom Functions                       -
+##----------------------------------------------------------------
+
+# This is a wrapper function round ape{moran.I()} to allow comparison of multiple,
+# within plot, tree distances as described in the Material & Methods section.
+
+moran_wrapper <- function(variable, coord_x, coord_y) {
+  require(ape)
+  dst <- as.matrix(dist(cbind(coord_x, coord_y)))
+  dst_inv <- 1/dst
+  diag(dst_inv) <- 0 
+  morans_I <- ape::Moran.I(variable, dst_inv)
+  if(morans_I$p.value > 0.05) {
+    print('No autospatial correlation')
+  } else {
+    print('Autospatial correlation!')
+  }
+  return(morans_I)
+}
+
+# Setting the colors for the community bar graphs. 
+my_cols <- paletteer_d('ggsci::default_igv')
+
+# Setting the colors for the raincloud plots comparing alpha diversity. 
+box_cols <- c( "#5050FFFF", "#CE3D32FF", "#008099FF")
+
+##################################################################
+##                          Section 2                           ##
+##                Decontam Run and LULU curation                ##
+##################################################################
+
+##---------
+##  Algae  
+##---------
+
+###
+# Decontam
+###
+
+# Load ASV table for algae (available as supplementary data).
+algae_otu <- read.csv(here('asv_table_algae.csv'), header = F, sep = ',')
+
+# Set column names from first row. 
+colnames(algae_otu) <- algae_otu[1,]
+algae_otu <- algae_otu[-1,]
+
+class(algae_otu)
+algae_otu <- as.matrix(algae_otu)
+
+# Naming the Samples. 
+colnames(algae_otu) <- paste0("Sample_", colnames(algae_otu))
+
+# set ASV ID as the rownames.
+rownames(algae_otu) <- algae_otu[,1]
+algae_otu <- algae_otu[,-1]
+
+class(algae_otu) <- "numeric" 
+
+# Load the DNA concentration necessary for decontam (available as supplementary data). 
+algae_conc <- read.csv(here('algae_decontam_conc.csv'), header = T, sep =',')
+rownames(algae_conc) <- algae_conc$sample
+
+# Make the parts of the phyloseq object.
+ASV_algae_decontam <- otu_table(algae_otu, taxa_are_rows = TRUE)
+sampledata_algae_decontam <- sample_data(algae_conc)
+
+# Combine with phyloseq
+ps_algae_decontam <- phyloseq(ASV_algae_decontam, sampledata_algae_decontam)
+ps_algae_decontam
+
+# Check the library sizes of the Samples and Controls.
+df_algae <- as.data.frame(sample_data(ps_algae_decontam)) # Put sample_data into a ggplot-friendly data.frame
+df_algae$LibrarySize <- sample_sums(ps_algae_decontam)
+df_algae <- df_algae[order(df_algae$LibrarySize),]
+df_algae$Index <- seq(nrow(df_algae))
+ggplot(data=df_algae, aes(x=Index, y=LibrarySize, color=Sample_or_Control)) +
+  geom_point()
+
+# Decontam with combined frequency and prevalence approach. 
+sample_data(ps_algae_decontam)$is.neg <- sample_data(ps_algae_decontam)$Sample_or_Control == "Control Sample"
+contam_algae_combi <- isContaminant(ps_algae_decontam,
+                                    method = 'combined',
+                                    neg = 'is.neg',
+                                    conc = 'quant_reading')
+table(contam_algae_combi$contaminant)
+which(contam_algae_combi$contaminant)
+
+# Trim the identified contaminants from the phyloseq object.
+# In this case there are no identified contaminants. So the non-contaminant phyloseq object,
+# will be the same as before.
+ps_algae_noncontam <- ps_algae_decontam
+ps_algae_noncontam
+
+###
+#LULU curation
+###
+
+# Remove taxa without reads.
+ps_algae_noncontam_pruned <- prune_taxa(taxa_sums(ps_algae_noncontam) > 0,
+                                        ps_algae_noncontam)
+ASV_table_algae <- as.data.frame(otu_table(ps_algae_noncontam_pruned))
+algae_matchlist <- read.table(here('match_list_algae.txt'),
+                              header = F,
+                              as.is = T,
+                              stringsAsFactors = F)
+
+# Run the LULU algorithm. 
+
+ASV_table_algae_cur <- lulu(ASV_table_algae, algae_matchlist)
+
+
+ASV_table_algae_cur$curated_count
+ASV_table_algae_cur$discarded_count
+
+##---------
+##  Fungi  
+##---------
+
+###
+# Decontam
+###
+
+# Load ASV table for fungi (available as supplementary data).
+fungi_otu <- read.csv(here('asv_table_fungi.txt'), header = F, sep = ',')
+
+# Set column names from first row. 
+colnames(fungi_otu) <- fungi_otu[1,]
+fungi_otu <- fungi_otu[-1,]
+
+class(fungi_otu)
+fungi_otu <- as.matrix(fungi_otu)
+
+
+# Naming the Samples. 
+colnames(fungi_otu) <- paste0("Sample_", colnames(fungi_otu))
+
+# set ASV ID as the rownames.
+rownames(fungi_otu) <- fungi_otu[,1]
+fungi_otu <- fungi_otu[,-1]
+
+class(fungi_otu) <- "numeric" 
+
+# Load the DNA concentration necessary for decontam (available as supplementary data). 
+fungi_conc <- read.csv(here('fungi_decontam_conc.csv'), header = T, sep =',')
+rownames(fungi_conc) <- fungi_conc$sample
+
+# Make the parts of the phyloseq object.
+ASV_fungi_decontam <- otu_table(fungi_otu, taxa_are_rows = TRUE)
+sampledata_fungi_decontam <- sample_data(fungi_conc)
+
+# Combine with phyloseq
+ps_fungi_decontam <- phyloseq(ASV_fungi_decontam, sampledata_fungi_decontam)
+ps_fungi_decontam
+
+# Check the library sizes of the Samples and Controls.
+df_fungi <- as.data.frame(sample_data(ps_fungi_decontam)) # Put sample_data into a ggplot-friendly data.frame
+df_fungi$LibrarySize <- sample_sums(ps_fungi_decontam)
+df_fungi <- df_fungi[order(df_fungi$LibrarySize),]
+df_fungi$Index <- seq(nrow(df_fungi))
+ggplot(data=df_fungi, aes(x=Index, y=LibrarySize, color=Sample_or_Control)) +
+  geom_point()
+
+# Decontam with combined frequency and prevalence approach. 
+sample_data(ps_fungi_decontam)$is.neg <- sample_data(ps_fungi_decontam)$Sample_or_Control == "Control Sample"
+contam_fungi_combi <- isContaminant(ps_fungi_decontam,
+                                    method = 'combined',
+                                    neg = 'is.neg',
+                                    conc = 'quant_reading')
+table(contam_fungi_combi$contaminant)
+which(contam_fungi_combi$contaminant)
+
+# Trim the identified contaminants from the phyloseq object 
+ps_fungi_noncontam <- prune_taxa(!contam_fungi_combi$contaminant,
+                                 ps_fungi_decontam)
+ps_fungi_noncontam
+
+###
+#LULU curation
+###
+
+# Remove taxa without reads.
+ps_fungi_noncontam_pruned <- prune_taxa(taxa_sums(ps_fungi_noncontam) > 0,
+                                  ps_fungi_noncontam)
+ASV_table_fungi <- as.data.frame(otu_table(ps_fungi_noncontam_pruned))
+fungi_matchlist <- read.table(here('match_list_fungi.txt'),
+                              header = F,
+                              as.is = T,
+                              stringsAsFactors = F)
+
+# Run the LULU algorithm. 
+
+ASV_table_fungi_cur <- lulu(ASV_table_fungi, fungi_matchlist)
+
+
+ASV_table_fungi_cur$curated_count
+ASV_table_fungi_cur$discarded_count
+
+##---------
+## Bacteria  
+##---------
+
+###
+# Decontam
+###
+
+# Load ASV table for bacteria (available as supplementary data).
+bacteria_otu <- read.csv(here('asv_table_bacteria.txt'), header = F, sep = '\t')
+
+# Set column names from first row. 
+colnames(bacteria_otu) <- bacteria_otu[1,]
+bacteria_otu <- bacteria_otu[-1,]
+
+class(bacteria_otu)
+bacteria_otu <- as.matrix(bacteria_otu)
+
+# Naming the Samples. 
+colnames(bacteria_otu) <- paste0("Sample_", colnames(bacteria_otu))
+
+# set ASV ID as the rownames.
+rownames(bacteria_otu) <- bacteria_otu[,1]
+bacteria_otu <- bacteria_otu[,-1]
+
+class(bacteria_otu) <- "numeric" 
+
+# Load the DNA concentration necessary for decontam (available as supplementary data). 
+bacteria_conc <- read.csv(here('bacteria_decontam_conc.csv'), header = T, sep =',')
+rownames(bacteria_conc) <- bacteria_conc$sample
+
+# Make the parts of the phyloseq object.
+ASV_bacteria_decontam <- otu_table(bacteria_otu, taxa_are_rows = TRUE)
+sampledata_bacteria_decontam <- sample_data(bacteria_conc)
+
+# Combine with phyloseq
+ps_bacteria_decontam <- phyloseq(ASV_bacteria_decontam, sampledata_bacteria_decontam)
+ps_bacteria_decontam
+
+# Check the library sizes of the Samples and Controls.
+df_bacteria <- as.data.frame(sample_data(ps_bacteria_decontam)) # Put sample_data into a ggplot-friendly data.frame
+df_bacteria$LibrarySize <- sample_sums(ps_bacteria_decontam)
+df_bacteria <- df_bacteria[order(df_bacteria$LibrarySize),]
+df_bacteria$Index <- seq(nrow(df_bacteria))
+ggplot(data=df_bacteria, aes(x=Index, y=LibrarySize, color=Sample_or_Control)) +
+  geom_point()
+
+# Decontam with combined frequency and prevalence approach. 
+sample_data(ps_bacteria_decontam)$is.neg <- sample_data(ps_bacteria_decontam)$Sample_or_Control == "Control Sample"
+contam_bacteria_combi <- isContaminant(ps_bacteria_decontam,
+                                    method = 'combined',
+                                    neg = 'is.neg',
+                                    conc = 'quant_reading')
+table(contam_bacteria_combi$contaminant)
+which(contam_bacteria_combi$contaminant)
+
+# Trim the identified contaminants from the phyloseq object. 
+ps_bacteria_noncontam <- prune_taxa(!contam_bacteria_combi$contaminant,
+                                    ps_bacteria_decontam)
+ps_bacteria_noncontam
+
+###
+#LULU curation
+###
+
+# Remove taxa without reads.
+ps_bacteria_noncontam_pruned <- prune_taxa(taxa_sums(ps_bacteria_noncontam) > 0,
+                                        ps_bacteria_noncontam)
+ASV_table_bacteria <- as.data.frame(otu_table(ps_bacteria_noncontam_pruned))
+bacteria_matchlist <- read.table(here('match_list_bacteria.txt'),
+                              header = F,
+                              as.is = T,
+                              stringsAsFactors = F)
+
+# Run the LULU algorithm. 
+
+ASV_table_bacteria_cur <- lulu(ASV_table_bacteria, bacteria_matchlist)
+
+
+ASV_table_bacteria_cur$curated_count
+ASV_table_bacteria_cur$discarded_count
+
+##################################################################
+##                          Section 3                           ##
+##         Data Loading, Data Cleaning and Initialization       ##
+##################################################################
+
+##----------------------------------------------------------------
+##                        Metadata table                         -
+##----------------------------------------------------------------
+
+# Loading Forest Management Data (available at https://www.bexis.uni-jena.de/PublicData/PublicData.aspx?DatasetId=16466)
+formi <- read.table(here('16466.txt'), header = T, sep = '\t')
+
+# renaming the PlotID to match other columns, extracting only data for Hainich
+HAI_formi <- formi %>% 
+  dplyr::rename(., Plot_ID = EP_Plotid) %>%
+  filter(.,grepl('HEW', Plot_ID)) %>%
+  select(., c("Plot_ID", "ForMI")) %>% 
+  add_row(Plot_ID = "HEW51", ForMI = NA)
+
+# Loading tree measurements (available as supplementary data)
+tree_meas <- read.csv(here('beech_micro_communities_metadata.csv'), sep = ',', header = T)
+
+# Remove the corner points. Necessary for calculation of x & y coordinates within plots
+# but do not represent trees. 
+tree_meas <- filter(tree_meas, sample_num != 'corner')
+
+# Join the tables to get one metadata table.
+metadata <- inner_join(tree_meas, HAI_formi, by = 'Plot_ID')
+
+# Create management intensity categories.
+metadata$intensity_formi <- ifelse(metadata$ForMI >= 1, 'high', 'low') 
+
+# Create tree size categories. 
+
+metadata$size_cat <- ifelse(metadata$DBH_cm < 15, 'small',
+                            ifelse(metadata$DBH_cm >= 30, 'big', 'medium'))
+
+# Set rownames to allow turning dataframe into sample_data object in phyloseq. 
+rownames(metadata) <- metadata$Sample_ID
+metadata$sample_num <- NULL
+metadata$Sample_ID <- NULL
+
+##----------------------------------------------------------------
+##                          ASV tables                           -
+##----------------------------------------------------------------
+
+##---------
+##  Algae  
+##---------
+
+# Keep only samples that do represent real tree swabs. Cut Controls.
+asv_algae <- ASV_table_algae_cur %>% dplyr::select(num_range('Sample_', 1:96))
+
+
+##---------
+##  Bacteria  
+##---------
+
+# Keep only samples that do represent real tree swabs. Cut Controls.
+asv_bacteria <- ASV_table_bacteria_cur %>% dplyr::select(num_range('Sample_', 1:96))
+
+##---------
+##  Fungi  
+##---------
+
+# Keep only samples that do represent real tree swabs. Cut Controls. 
+asv_fungi <- ASV_table_fungi_cur %>% dplyr::select(num_range('Sample_', 1:96))
+
+##---------------------------------------------------------------
+##                        Taxonomy Tables                       -
+##---------------------------------------------------------------
+
+##---------
+##  Algae  
+##---------
+
+# Load the algal taxonomy table as obtained from Seed2 and blast. 
+tax_algae <- readRDS(here('algae_tax_seed2.rds'))
+row.names(tax_algae) <- tax_algae$ASV_ID
+
+# Remove the unwanted columns.
+tax_algae$X <- NULL
+tax_algae$sequence <- NULL
+tax_algae$ASV_ID <- NULL
+tax_algae$Description <- NULL
+tax_algae$similarity <- NULL
+tax_algae$coverage <- NULL
+
+##---------
+##  Bacteria  
+##---------
+
+# Load the bacterial taxonomy table. 
+# (Available as supplementary data)
+tax_bacteria <- readRDS(here('tax_table_bacteria.rds'))
+tax_bacteria <- as.data.frame(tax_bacteria) %>% tibble::rownames_to_column('sequence')
+tax_bacteria <- tax_bacteria %>%
+  dplyr::rename(sequence_bacteria = sequence)
+
+# Load bacterial sequences. 
+bacteria_seqs_fasta <- readDNAStringSet(here('ASVs_bacteria.fa'))
+
+# Make a dataframe of the sequences and their ASV ID. 
+seq_name_bacteria <- names(bacteria_seqs_fasta)
+sequence_bacteria <- paste(bacteria_seqs_fasta)
+bacteria_rep_seqs <- data.frame(seq_name_bacteria, sequence_bacteria)
+
+# Join the taxonomy table and the representative sequences
+tax_clean_bacteria <- left_join(tax_bacteria, bacteria_rep_seqs, by = 'sequence_bacteria')
+
+# Remove the underscore to make the Sample ID the same as in the ASV table. 
+tax_clean_bacteria$seq_name_bacteria <- gsub("_", "", tax_clean_bacteria$seq_name_bacteria)
+
+# Set rownames.
+row.names(tax_clean_bacteria) <- tax_clean_bacteria$seq_name_bacteria
+
+# Remove any Chloroplast Sequences
+bacteria_tax_fin_raw <- dplyr::filter(tax_clean_bacteria, Order != 'Chloroplast')
+
+bacteria_tax_fin_raw$seq_name_bacteria <- NULL
+bacteria_tax_fin_raw$sequence_bacteria <- NULL
+
+##---------
+##  Fungi  
+##---------
+
+# Load the fungal taxonomy table.
+# (Available as supplementary data)
+tax_fungi <- readRDS(here('tax_table_fungi.rds'))
+tax_fungi <- as.data.frame(tax_fungi) %>% tibble::rownames_to_column('sequence')
+tax_fungi <- tax_fungi %>%
+  dplyr::rename(sequence_fungi = sequence)
+
+# Load the fungal reads.
+fungi_seqs_fasta <- readDNAStringSet(here('Fungi', 'ASVs_fungi.fa'))
+
+# Make a dataframe of the sequences and their ASV ID. 
+seq_name_fungi <- names(fungi_seqs_fasta)
+sequence_fungi <- paste(fungi_seqs_fasta)
+fungi_rep_seqs <- data.frame(seq_name_fungi, sequence_fungi)
+
+# Join the taxonomy table and the representative sequences
+tax_clean_fungi <- left_join(tax_fungi, fungi_rep_seqs, by = 'sequence')
+
+# Split the taxonomy into different columns of taxonomic levels.
+
+fungi_tax_fin <- tidyr::separate(tax_clean_fungi, Kingdom, c(NA, 'Kingdom') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Phylum, c(NA, 'Phylum') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Class, c(NA, 'Class') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Order, c(NA, 'Order') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Family, c(NA, 'Family') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Genus, c(NA, 'Genus') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Species, c(NA, 'Species') , sep = '__')
+
+# Set the rownames.
+rownames(fungi_tax_fin) <- fungi_tax_fin$seq_name_fungi 
+fungi_tax_fin$seq_name_fungi <- NULL 
+
+# Remove the sequence column.
+fungi_tax_fin_raw$sequence <- NULL
+
+# Remove sequences that could not be assigned at Phylum level.
+fungi_tax_fin_assigned <- dplyr::filter(fungi_tax_fin_raw, !is.na(Phylum))
+
+##---------------------------------------------------------------
+##               Create the Phyloseq Objects                    -
+##---------------------------------------------------------------
+
+##---------
+##  Algae  
+##---------
+
+# Transform dataframe to matrix.
+asvmat_algae <- as.matrix(asv_algae) 
+
+# Transform dataframe to matrix.
+taxmat_algae <- as.matrix(tax_algae) 
+
+# Create ASV table for phyloseq.
+ASV_ALG <- otu_table(asvmat_algae, taxa_are_rows = T)
+
+# Create taxonomy table for phyloseq.
+TAX_ALG <- tax_table(taxmat_algae) 
+
+# Metadata for phyloseq. 
+sampledata <- sample_data(metadata) 
+
+# Combine in phyloseq object. 
+phy_algae <- phyloseq(ASV_ALG, TAX_ALG, sampledata) 
+phy_algae
+
+# Seed2 gives slightly different Taxonomy levels. We correct this here.
+tax_table(phy_algae) <- tax_table(phy_algae)[,c(1,3:7)]
+
+colnames(tax_table(phy_algae)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus')
+rank_names(phy_algae)
+
+##---------
+##  Bacteria  
+##---------
+
+# Transform dataframe to matrix.
+asvmat_bacteria <- as.matrix(asv_bacteria) 
+
+# Transform dataframe to matrix.
+taxmat_bacteria <- as.matrix(bacteria_tax_fin_raw) 
+
+# Create OTU table for phyloseq.
+ASV_BAC <- otu_table(asvmat_bacteria, taxa_are_rows = T) 
+
+# Create taxonomy table for phyloseq.
+TAX_BAC <- tax_table(taxmat_bacteria) 
+
+# Metadata for phyloseq.
+sampledata <- sample_data(metadata)  
+
+# Combine in phyloseq object. 
+phy_bacteria <- phyloseq(ASV_BAC, TAX_BAC, sampledata) 
+phy_bacteria
+
+##---------
+##  Fungi  
+##---------
+
+# Transform dataframe to matrix.
+asvmat_fungi <- as.matrix(asv_fungi)
+
+# Transform dataframe to matrix.
+taxmat_fungi <- as.matrix(fungi_tax_fin_assigned) 
+
+# Create ASV table for phyloseq.
+ASV_FUN <- otu_table(asvmat_fungi, taxa_are_rows = T) 
+
+# Create taxonomy table for phyloseq.
+TAX_FUN <- tax_table(taxmat_fungi) 
+
+# Metadata for phyloseq. 
+sampledata <- sample_data(metadata) 
+
+# Combine in phyloseq object. 
+phy_fungi <- phyloseq(ASV_FUN, TAX_FUN, sampledata) 
+phy_fungi
+
+#################################################################
+##                          Section 3                          ##
+##                   Intra-Group Diversities                   ##
+#################################################################
+
+##---------
+##  Algae  
+##---------
+
+###
+#Alpha Diversity 
+###
+
+# Calculate the Shannon Diversity.
+shannon_alg <- estimate_richness(phy_algae, split = T, measures = 'Shannon')
+
+# Make a new sample_data object and merge with existing phyloseq object.
+new_var_alg <- sample_data(shannon_alg)
+phy_algae <- merge_phyloseq(phy_algae, new_var_alg)
+
+# Turn the sample_data object into a dataframe for ANOVA.
+alg_eval_df <- data.frame(sample_data(phy_algae))
+
+# Conduct ANOVA and verify results with Tukey HSD.
+anova_alg_alpha <- aov(Shannon ~ intensity_formi + size_cat, data = alg_eval_df)
+summary(anova_alg_alpha)
+
+TukeyHSD(anova_alg_alpha)
+
+###
+#Raincloud Plots of Alpha Diversity
+###
+
+# Code was adopted from Cédric Scherer. You can find a tutorial at: 
+# https://www.cedricscherer.com/2021/06/06/visualizing-distributions-with-raincloud-plots-and-how-to-create-them-with-ggplot2/
+
+# Extract the sample data from the phyloseq object.
+algae_sampledata <- sample_data(phy_algae)
+
+# Comparing the Management Categories.
+alg_rain_manage <- ggplot(algae_sampledata,
+                          aes(x = intensity_formi,
+                              y = Shannon,
+                              fill = intensity_formi,
+                              colour = intensity_formi)) + 
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .5, 
+    ## move geom to the right
+    justification = -.2, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA,
+    alpha = 0.5
+  ) + 
+  geom_boxplot(
+    width = .14, 
+    ## remove outliers
+    outlier.color = NA,  
+    alpha = 0.5,
+    size = 0.1
+  ) +
+  gghalves::geom_half_point(
+    ## draw jitter on the left
+    side = "l", 
+    ## control range of jitter
+    range_scale = .4, 
+    ## add some transparency
+    alpha = .5, 
+    size = 0.5
+  )  +
+  ## remove white space on the left
+  coord_cartesian(xlim = c(1.2, NA)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(colour = "black", size = 9),
+        axis.line = element_line(colour = "black", size = .2),
+        axis.ticks = element_line(size = 0.2),
+        axis.title.y = element_text(size = 9),
+        axis.title.x = element_text(size = 9),
+        legend.position = 'none', 
+        plot.title = element_text(vjust = 0, hjust = 0.007),
+        plot.subtitle = element_text(vjust = -0.5, hjust = 0.03, size = 9))+
+  ylab( 'Alpha Diversity (Shannon)') +
+  xlab('Management Intensity') + 
+  labs(subtitle = '(A)') +
+  scale_fill_manual(values = box_cols) + 
+  scale_colour_manual(values = box_cols)
+alg_rain_manage
+
+# Comparing the Tree Sizes.
+alg_rain_size <- ggplot(algae_sampledata,
+                        aes(x = size_cat,
+                            y = Shannon, 
+                            fill = size_cat,
+                            colour = size_cat)) + 
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .5, 
+    ## move geom to the right
+    justification = -.25, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA,
+    alpha = 0.5
+  ) + 
+  geom_boxplot(
+    width = .15, 
+    ## remove outliers
+    outlier.color = NA,  
+    alpha = 0.5, 
+    size = 0.1
+  ) +
+  gghalves::geom_half_point(
+    ## draw jitter on the left
+    side = "l", 
+    ## control range of jitter
+    range_scale = .3, 
+    ## add some transparency
+    alpha = .5,
+    size = .5
+  )  +
+  ## remove white space on the left
+  coord_cartesian(xlim = c(1.2, NA)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(colour = "black", size = 9),
+        axis.title.y = element_text(size = 9),
+        axis.title.x = element_text(size = 9),
+        axis.line = element_line(colour = "black", size = .2),
+        axis.ticks = element_line(size = 0.2),
+        legend.position = 'none', 
+        plot.subtitle = element_text(vjust = -0.5, hjust = .03, size = 9)) +
+  ylab( 'Alpha Diversity (Shannon)') +
+  xlab('Tree Size') + 
+  labs(subtitle = '(D)') +
+  scale_fill_manual(values = box_cols) + 
+  scale_colour_manual(values = box_cols) 
+alg_rain_size
+
+###
+#Spatial Autocorrelation of alpha diversity
+###
+
+# Make a list that includes the sample data split by plots.
+plotwise_alg <- sample_data(phy_algae) %>% 
+  dplyr::group_by(Plot_ID) %>%
+  group_split()
+
+# Initiate empty lists to fill.
+results_list_alg <- list()
+plot_ID <- NULL
+
+# Calculate Morans I for the trees within each plot. 
+for (j in 1:length(plotwise_alg)) {
+  results <- moran_wrapper(plotwise_alg[[j]]$Shannon,
+                           plotwise_alg[[j]]$x_coord,
+                           plotwise_alg[[j]]$y_coord)
+  results_list_alg[[j]] <- results
+  plot_ID[j] <- unique(plotwise_alg[[j]]$Plot_ID)
+}
+
+# Set the Plot ID as a name for the list.
+names(results_list_alg) <- plot_ID  
+
+# Combine the results in a dataframe.
+morans_i_alg_plots <- data.frame(do.call(rbind.data.frame, results_list_alg))
+morans_i_alg_plots
+
+###
+#Community Barplots
+###
+
+# Aggregate the taxa at order level. This is to allow better visualization, 
+# while still retaining the most information.
+phy_order_alg <- phy_algae %>%
+  aggregate_taxa(level = "Order")
+
+# Subset the phyloseq object to the top 24 orders and put the rest in 
+# a category "Others", based on relative abundance. 
+phy_alg_ord_top25 <- get_top_taxa(phy_order_alg, 24,
+                                  relative = TRUE,
+                                  other_label = "Others")
+
+# Transform the subset dataset to compositional (relative) abundances.
+phy_alg_ord_top25_plot <-  phy_alg_ord_top25 %>%
+  aggregate_taxa(level = "Order") %>%  
+  microbiome::transform(transform = "compositional") 
+
+# Extract the names of the Orders.
+taxa_names(phy_alg_ord_top25_plot) <- tax_table(phy_alg_ord_top25_plot)[, 4]
+
+# Turn the columns necessary for the ploting into sorted factors to set the order they are plotted in.
+sample_data(phy_alg_ord_top25_plot)$intensity_formi_f <- factor(sample_data(phy_alg_ord_top25_plot)$intensity_formi, 
+                                                                levels = c("low", "high")) 
+sample_data(phy_alg_ord_top25_plot)$Plot_ID <- factor(sample_data(phy_alg_ord_top25_plot)$Plot_ID,
+                                                      levels = c('HEW5', 'HEW11', 'HEW20', 'HEW27', 'HEW34','HEW35','HEW36','HEW37',
+                                                                 'HEW8','HEW26','HEW28','HEW31','HEW32','HEW33','HEW43','HEW49')) 
+sample_data(phy_alg_ord_top25_plot)$size_cat <- factor(sample_data(phy_alg_ord_top25_plot)$size_cat,
+                                                       levels = c('big', 'medium', 'small')) 
+sample_names(phy_alg_ord_top25_plot) <- c(paste0('T', 1:96))
+
+# Sort the taxa names alphabetically. 
+taxa_names_alg_ord <- sort(taxa_names(phy_alg_ord_top25_plot))
+
+taxa_names_alg_ord <- c("Chaetophorales", "Chlorellales", "Klebsormidiales",
+                        "Prasiolales", "Sphaeropleales", "Trebouxiales", "Unknown")
+
+# Custom plotting to make a nice stacked barplot. 
+alg_ord_plots <- phy_alg_ord_top25_plot %>%
+  plot_composition( group_by =  'Plot_ID', otu.sort = taxa_names_alg_ord, sample.sort = 'size_cat') +
+  scale_fill_manual(values = ggplot2::alpha(my_cols, 0.9), name = 'Order') +
+  guides(fill = guide_legend(title.position = 'top')) +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_line(colour = 'black', size = 0.5),
+        axis.text.x =  element_text(colour = "black", size = 5, hjust = 1),
+        axis.text.y =  element_text(colour = "black", size = 10),
+        axis.title = element_text(colour = "black", size = 10),
+        legend.position = 'bottom', 
+        plot.title = element_text(vjust = -4, hjust = 0.03), 
+        legend.text = element_text(colour = 'black', size = 7),
+        legend.title =  element_text(size = 10),
+        legend.key.size = unit(2.5, 'mm'),
+        axis.ticks.length.x = unit(-0.2, "cm"), 
+        legend.box.spacing = unit(-4, 'mm'),
+        legend.background = element_rect(fill = 'transparent'),
+        text = element_text(colour = 'black')) + 
+  xlab('Tree ID') +
+  ylab('Relative Abundance')  +
+  scale_y_continuous(label = scales::percent)  + 
+  labs( subtitle = '(A)')
+
+alg_ord_plots
+
+
+##---------
+##  Bacteria  
+##-------------------------------------------------------------------------------------------------------
+
+# Calculate the Shannon Diversity.
+shannon_bac <- estimate_richness(phy_bacteria, split = T, measures = 'Shannon')
+
+# Make a new sample_data object and merge with existing phyloseq object.
+new_var_bac <- sample_data(shannon_bac)
+phy_bacteria <- merge_phyloseq(phy_bacteria, new_var_bac)
+
+# Turn the sample_data object into a dataframe for ANOVA.
+bac_eval_df <- data.frame(sample_data(phy_bacteria))
+
+# Conduct ANOVA and verify results with Tukey HSD.
+anova_bac_alpha <- aov(Shannon ~ intensity_formi + size_cat, data = bac_eval_df)
+summary(anova_bac_alpha)
+
+TukeyHSD(anova_bac_alpha)
+
+###
+#Raincloud Plots of Alpha Diversity
+###
+
+# Code was adopted from Cédric Scherer. You can find a tutorial at: 
+# https://www.cedricscherer.com/2021/06/06/visualizing-distributions-with-raincloud-plots-and-how-to-create-them-with-ggplot2/
+
+# Compare Management Categories.
+
+bacteria_sampledata <- sample_data(phy_bacteria)
+
+bac_rain_manage <- ggplot(bacteria_sampledata, aes(x = intensity_formi, y = Shannon, fill = intensity_formi, colour = intensity_formi)) + 
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .7, 
+    ## move geom to the right
+    justification = -.15, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA,
+    alpha = 0.5
+  ) + 
+  geom_boxplot(
+    width = .14, 
+    ## remove outliers
+    outlier.color = NA, ## `outlier.shape = NA` works as well 
+    alpha = 0.5, 
+    size = 0.1
+  ) +
+  ## add justified jitter from the {gghalves} package
+  gghalves::geom_half_point(
+    ## draw jitter on the left
+    side = "l", 
+    ## control range of jitter
+    range_scale = .4, 
+    ## add some transparency
+    alpha = .5,
+    size = 0.5
+  )  +
+  ## remove white space on the left
+  coord_cartesian(xlim = c(1.2, NA)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(colour = "black", size = 9),
+        axis.line = element_line(colour = "black", size = .2),
+        axis.ticks = element_line(size = 0.2),
+        legend.position = 'none', 
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 9),
+        plot.subtitle = element_text(vjust = -0.5, hjust = 0.03, size = 9)) +
+  xlab('Management Intensity') + 
+  labs(subtitle = '(B)') +
+  scale_fill_manual(values = box_cols) + 
+  scale_colour_manual(values = box_cols)
+bac_rain_manage
+
+saveRDS(bac_rain_manage, 'bac_rain_manage.rds')
+
+# Compare Tree Sizes.
+
+bac_rain_size <- ggplot(bacteria_sampledata, aes(x = size_cat, y = Shannon, fill = size_cat, colour = size_cat)) + 
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .5, 
+    ## move geom to the right
+    justification = -.25, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA,
+    alpha = 0.5
+  ) + 
+  geom_boxplot(
+    width = .15, 
+    ## remove outliers
+    outlier.color = NA, ## `outlier.shape = NA` works as well 
+    alpha = 0.5, 
+    size = 0.1
+  ) +
+  ## add justified jitter from the {gghalves} package
+  gghalves::geom_half_point(
+    ## draw jitter on the left
+    side = "l", 
+    ## control range of jitter
+    range_scale = .3, 
+    ## add some transparency
+    alpha = .5,
+    size = 0.5
+  )  +
+  ## remove white space on the left
+  coord_cartesian(xlim = c(1.2, NA)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 9),
+        axis.text = element_text(colour = "black", size = 9),
+        axis.line = element_line(colour = "black", size = .2),
+        axis.ticks = element_line(size = 0.2),
+        legend.position = 'none', 
+        plot.subtitle = element_text(vjust = -0.5, hjust = .03, size = 9)) +
+  xlab('Tree Size') + 
+  labs(subtitle = '(E)') +
+  scale_fill_manual(values = box_cols) + 
+  scale_colour_manual(values = box_cols) 
+bac_rain_size
+
+###
+#Spatial Autocorrelation of alpha diversity
+###
+
+# Make a list that includes the sample data split by plots.
+plotwise_bac <- sample_data(phy_bacteria) %>% 
+  dplyr::group_by(Plot_ID) %>%
+  group_split()
+
+# Initiate empty lists to fill.
+results_list_bac <- list()
+plot_ID <- NULL
+
+# Calculate Morans I for the trees within each plot. 
+for (j in 1:length(plotwise_bac)) {
+  results <- moran_wrapper(plotwise_bac[[j]]$Shannon,
+                           plotwise_bac[[j]]$x_coord,
+                           plotwise_bac[[j]]$y_coord)
+  results_list_bac[[j]] <- results
+  plot_ID[j] <- unique(plotwise_bac[[j]]$Plot_ID)
+}
+
+# Set the Plot ID as a name for the list.
+names(results_list_bac) <- plot_ID  
+
+# Combine the results in a dataframe.
+morans_i_bac_plots <- data.frame(do.call(rbind.data.frame, results_list_bac))
+morans_i_bac_plots
+
+###
+#Community Barplots
+###
+
+# Aggregate the taxa at order level. This is to allow better visualization, 
+# while still retaining the most information.
+phy_ord_bac <- phy_bacteria %>%
+  aggregate_taxa(level = "Order")
+
+# Subset the phyloseq object to the top 24 orders and put the rest in 
+# a category "Others", based on relative abundance. 
+phy_bac_ord_top25 <- get_top_taxa(phy_ord_bac,
+                                  24, relative = TRUE,
+                                  other_label = "Others")
+
+# Transform the subset dataset to compositional (relative) abundances.
+phy_bac_ord_top25_plot <-  phy_bac_ord_top25 %>%
+  aggregate_taxa(level = "Order") %>%  
+  microbiome::transform(transform = "compositional") 
+
+# Extract the names of the Orders.
+taxa_names(phy_bac_ord_top25_plot) <- tax_table(phy_bac_ord_top25_plot)[, 4]
+
+# Turn the columns necessary for the ploting into sorted factors to set the order they are plotted in.
+sample_data(phy_bac_ord_top25_plot)$intensity_formi_f <- factor(sample_data(phy_bac_ord_top25_plot)$intensity_formi, 
+                                                                levels = c("low", "high")) 
+sample_data(phy_bac_ord_top25_plot)$Plot_ID <- factor(sample_data(phy_bac_ord_top25_plot)$Plot_ID,
+                                                      levels = c('HEW5', 'HEW11', 'HEW20', 'HEW27', 'HEW34','HEW35','HEW36','HEW37',
+                                                                 'HEW8','HEW26','HEW28','HEW31','HEW32','HEW33','HEW43','HEW49')) 
+sample_data(phy_bac_ord_top25_plot)$size_cat <- factor(sample_data(phy_bac_ord_top25_plot)$size_cat,
+                                                       levels = c('big', 'medium', 'small')) 
+
+sample_names(phy_bac_ord_top25_plot) <- c(paste0('T', 1:96))
+
+# Sort the taxa names alphabetically.
+taxa_names_bac <- sort(taxa_names(phy_bac_ord_top25_plot))
+
+taxa_names_bac <- c("Abditibacteriales", "Acetobacterales", "Acidobacteriales", "Blastocatellales",
+                    "Burkholderiales", "Caulobacterales", "Chitinophagales", "Chthoniobacterales",
+                    "Cytophagales", "Deinococcales", "Fimbriimonadales", "Frankiales", "Isosphaerales",
+                    "Micrococcales", "Micromonosporales", "Propionibacteriales", "Pseudomonadales",
+                    "Pseudonocardiales", "Rhizobiales", "Solirubrobacterales", "Sphingobacteriales",
+                    "Sphingomonadales", "Tepidisphaerales", "Thermomicrobiales", 'Others')
+
+# Custom plotting to make a nice stacked barplot. 
+bac_ord_plots <- phy_bac_ord_top25_plot %>%
+  plot_composition( group_by =  'Plot_ID', otu.sort = taxa_names_bac, sample.sort = 'size_cat') +
+  scale_fill_manual(values = ggplot2::alpha(my_cols, 0.9), name = 'Order') +
+  guides(fill = guide_legend(title.position = 'top')) +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_line(colour = 'black', size = 0.5),
+        axis.text.x =  element_text(colour = "black", size = 5, hjust = 1),
+        axis.text.y =  element_text(colour = "black", size = 10),
+        axis.title = element_text(colour = "black", size = 10),
+        legend.position = 'bottom', 
+        plot.title = element_text(vjust = -4, hjust = 0.03), 
+        legend.text = element_text(colour = 'black', size = 7),
+        legend.title =  element_text(size = 10),
+        legend.key.size = unit(2.5, 'mm'),
+        axis.ticks.length.x = unit(-0.2, "cm"), 
+        legend.box.spacing = unit(-4, 'mm'),
+        legend.background = element_rect(fill = 'transparent'),
+        text = element_text(colour = 'black')) + 
+  xlab('Tree ID') +
+  ylab('Relative Abundance')  +
+  scale_y_continuous(label = scales::percent)  + 
+  labs( subtitle = '(B)')
+
+bac_ord_plots
+
+##---------
+##  Fungi  
+##----------------------------------------------------------------------------------------------
+
+# Calculate the Shannon Diversity.
+shannon_fun <- estimate_richness(phy_fungi, split = T, measures = 'Shannon')
+
+# Make a new sample_data object and merge with existing phyloseq object.
+new_var_fun <- sample_data(shannon_fun)
+phy_fungi <- merge_phyloseq(phy_fungi, new_var_fun)
+
+# Turn the sample_data object into a dataframe for ANOVA.
+fun_eval_df <- data.frame(sample_data(phy_fungi))
+
+# Conduct ANOVA and verify results with Tukey HSD.
+anova_fun_alpha <- aov(Shannon ~ intensity_formi + size_cat, data = fun_eval_df)
+summary(anova_fun_alpha)
+
+TukeyHSD(anova_fun_alpha)
+
+###
+#Raincloud Plots of Alpha Diversity
+###
+
+# Code was adopted from Cédric Scherer. You can find a tutorial at: 
+# https://www.cedricscherer.com/2021/06/06/visualizing-distributions-with-raincloud-plots-and-how-to-create-them-with-ggplot2/
+
+# Compare Management Categories.
+
+fungi_sampledata <- sample_data(phy_fungi)
+
+fun_rain_manage <- ggplot(fungi_sampledata, aes(x = intensity_formi, y = Shannon, fill = intensity_formi, colour = intensity_formi)) + 
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .7, 
+    ## move geom to the right
+    justification = -.15, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA,
+    alpha = 0.5
+  ) + 
+  geom_boxplot(
+    width = .14, 
+    ## remove outliers
+    outlier.color = NA, ## `outlier.shape = NA` works as well 
+    alpha = 0.5,
+    size = 0.1
+  ) +
+  ## add justified jitter from the {gghalves} package
+  gghalves::geom_half_point(
+    ## draw jitter on the left
+    side = "l", 
+    ## control range of jitter
+    range_scale = .4, 
+    ## add some transparency
+    alpha = .5,
+    size = .5
+  )  +
+  ## remove white space on the left
+  coord_cartesian(xlim = c(1.2, NA)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text = element_text(colour = "black", size = 9),
+        axis.line = element_line(colour = "black", size = .2),
+        axis.ticks = element_line(size = 0.2),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 9),
+        legend.position = 'none', 
+        plot.title = element_text(vjust = 0, hjust = 0.007),
+        plot.subtitle = element_text(vjust = -0.5, hjust = 0.03, size = 9))+
+  xlab('Management Intensity') + 
+  labs(subtitle = '(C)') +
+  scale_fill_manual(values = box_cols) + 
+  scale_colour_manual(values = box_cols) + 
+  scale_x_discrete(labels=c("low" = "low", "medium" = "high"))
+fun_rain_manage
+
+saveRDS(fun_rain_manage, 'fun_rain_manage.rds')
+
+# Compare Tree Sizes.
+fun_rain_size <- ggplot(fungi_sampledata, aes(x = size_cat, y = Shannon, fill = size_cat, colour = size_cat)) + 
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .5, 
+    ## adjust height
+    width = .5, 
+    ## move geom to the right
+    justification = -.25, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA,
+    alpha = 0.5
+  ) + 
+  geom_boxplot(
+    width = .15, 
+    ## remove outliers
+    outlier.color = NA, ## `outlier.shape = NA` works as well 
+    alpha = 0.5,
+    size = 0.1
+  ) +
+  ## add justified jitter from the {gghalves} package
+  gghalves::geom_half_point(
+    ## draw jitter on the left
+    side = "l", 
+    ## control range of jitter
+    range_scale = .3, 
+    ## add some transparency
+    alpha = .5,
+    size = .5
+  )  +
+  ## remove white space on the left
+  coord_cartesian(xlim = c(1.2, NA)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 9),
+        axis.text = element_text(colour = "black", size = 9),
+        axis.line = element_line(colour = "black", size = .2),
+        axis.ticks = element_line(size = 0.2),
+        legend.position = 'none', 
+        plot.subtitle = element_text(vjust = -0.5, hjust = .03, size = 9)) +
+  xlab('Tree Size') + 
+  labs(subtitle = '(F)') +
+  scale_fill_manual(values = box_cols) + 
+  scale_colour_manual(values = box_cols) 
+fun_rain_size
+
+###
+#Spatial Autocorrelation of alpha diversity
+###
+
+# Make a list that includes the sample data split by plots.
+plotwise_fun <- sample_data(phy_fungi) %>% 
+  dplyr::group_by(Plot_ID) %>%
+  group_split()
+
+# Initiate empty lists to fill.
+results_list_fun <- list()
+plot_ID <- NULL
+
+# Calculate Morans I for the trees within each plot. 
+for (j in 1:length(plotwise_fun)) {
+  results <- moran_wrapper(plotwise_fun[[j]]$Shannon,
+                           plotwise_fun[[j]]$x_coord,
+                           plotwise_fun[[j]]$y_coord)
+  results_list_fun[[j]] <- results
+  plot_ID[j] <- unique(plotwise_fun[[j]]$Plot_ID)
+}
+
+# Set the Plot ID as a name for the list.
+names(results_list_fun) <- plot_ID  
+
+# Combine the results in a dataframe.
+morans_i_fun_plots <- data.frame(do.call(rbind.data.frame, results_list_fun))
+morans_i_fun_plots
+
+###
+#Community Barplots
+###
+
+# Aggregate the taxa at order level. This is to allow better visualization, 
+# while still retaining the most information.
+phy_order_fun <- phy_fungi %>%
+  aggregate_taxa(level = "Order")
+
+# Subset the phyloseq object to the top 24 orders and put the rest in 
+# a category "Others", based on relative abundance. 
+phy_fun_ord_top25 <- get_top_taxa(phy_order_fun, 24, relative = TRUE, other_label = "Others")
+
+# Transform the subset dataset to compositional (relative) abundances.
+phy_fun_ord_top25_plot <-  phy_fun_ord_top25 %>%
+  aggregate_taxa(level = "Order") %>%  
+  microbiome::transform(transform = "compositional") 
+
+# Extract the names of the Orders.
+taxa_names(phy_fun_ord_top25_plot) <- tax_table(phy_fun_ord_top25_plot)[, 4]
+
+# Turn the columns necessary for the ploting into sorted factors to set the order they are plotted in.
+sample_data(phy_fun_ord_top25_plot)$intensity_formi_f <- factor(sample_data(phy_fun_ord_top25_plot)$intensity_formi, 
+                                                                levels = c("low", "high")) 
+sample_data(phy_fun_ord_top25_plot)$Plot_ID <- factor(sample_data(phy_fun_ord_top25_plot)$Plot_ID,
+                                                      levels = c('HEW5', 'HEW11', 'HEW20', 'HEW27', 'HEW34','HEW35','HEW36','HEW37',
+                                                                 'HEW8','HEW26','HEW28','HEW31','HEW32','HEW33','HEW43','HEW49')) 
+sample_data(phy_fun_ord_top25_plot)$size_cat <- factor(sample_data(phy_fun_ord_top25_plot)$size_cat,
+                                                       levels = c('big', 'medium', 'small')) 
+
+sample_names(phy_fun_ord_top25_plot) <- c(paste0('T', 1:96))
+
+# Sort the taxa names alphabetically.
+taxa_names_fun_ord <- sort(taxa_names(phy_fun_ord_top25_plot))
+
+taxa_names_fun_ord <- c("Agaricales", "Arthoniales", "Caliciales", "Candelariales",                 
+                        "Capnodiales", "Chaetothyriales", "Cystobasidiales", "Diaporthales",                         
+                        "Dothideales", "Erythrobasidiales", "Exobasidiales", "Helotiales",                           
+                        "Hypocreales", "Lecanorales", "Microbotryomycetes_ord_Incertae_sedis", "Myriangiales",                         
+                        "Orbiliales", "Ostropales", "Phallales", "Pleosporales", "Polyporales",                          
+                        "Sordariales", "Tremellales", "Unknown", "Others")
+
+# Custom plotting to make a nice stacked barplot. 
+fun_ord_plots <- phy_fun_ord_top25_plot %>%
+  plot_composition( group_by =  'Plot_ID', otu.sort = taxa_names_fun_ord, sample.sort = 'size_cat') +
+  scale_fill_manual(values = ggplot2::alpha(my_cols, 0.9), name = 'Order') +
+  guides(fill = guide_legend(title.position = 'top')) +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_line(colour = 'black', size = 0.5),
+        axis.text.x =  element_text(colour = "black", size = 5, hjust = 1),
+        axis.text.y =  element_text(colour = "black", size = 10),
+        axis.title = element_text(colour = "black", size = 10),
+        legend.position = 'bottom', 
+        plot.title = element_text(vjust = -4, hjust = 0.03), 
+        legend.text = element_text(colour = 'black', size = 7),
+        legend.title =  element_text(size = 10),
+        legend.key.size = unit(2.5, 'mm'),
+        axis.ticks.length.x = unit(-0.2, "cm"), 
+        legend.box.spacing = unit(-4, 'mm'),
+        legend.background = element_rect(fill = 'transparent'),
+        text = element_text(colour = 'black')) + 
+  xlab('Tree ID') +
+  ylab('Relative Abundance')  +
+  scale_y_continuous(label = scales::percent) + 
+  labs( subtitle = '(C)')
+
+fun_ord_plots
+
+#################################################################
+##                          Section 4                          ##
+##                   Intra-Group Interactions                  ##
+#################################################################
+
+##---------
+##  Algae  
+##-------------------------------------------------------------------------------------------------------
+
+#subset dataset to ASVs that contribute at least one percent
+#to all reads of a sample
+
+phy_algae_trans  = transform_sample_counts(phy_algae, function(x) x / sum(x) )
+phy_algae_abundfilt = filter_taxa(phy_algae_trans, function(x) sum(x) > .01, TRUE)
+keep_names <- taxa_names(phy_algae_abundfilt)
+
+my_subset <- subset(otu_table(phy_algae), rownames(otu_table(phy_algae)) %in% keep_names)
+phy_algae_raw_abundfilt <- merge_phyloseq(my_subset, tax_table(phy_algae), sample_data(phy_algae))
+
+
+
+saveRDS(phy_algae_raw_abundfilt, 'phy_algae_raw_abundfilt.rds')
+
+# this will be done on Malloy
+# library(SpiecEasi)
+# 
+# phy_algae_raw_abundfilt <- readRDS('phy_algae_raw_abundfilt.rds')
+# 
+# pargs2 <- list(rep.num=50, seed=10010, ncores=20)
+# 
+# se_alg_raw_abundfilt <- spiec.easi(phy_algae_raw_abundfilt, method='mb', 
+#                                    lambda.min.ratio=1e-1, nlambda=100, 
+#                                    sel.criterion='bstars', pulsar.select=TRUE,
+#                                    pulsar.params=pargs2)
+# 
+# saveRDS(se_alg_raw_abundfilt, 'se_alg_raw_abundfilt.rds')
+
+# now back to local R for plotting the network
+
+se_alg_raw_abundfilt <- readRDS(here('se_alg_raw_abundfilt.rds'))
+alg.mb <- adj2igraph(getRefit(se_alg_raw_abundfilt),  
+                     vertex.attr=list(name=taxa_names(phy_algae_raw_abundfilt)))
+
+###
+#plot the network
+###
+
+# convert to gephi 
+
+alg.mb_gephi <- igraph.to.gexf(alg.mb)
+
+write.gexf(alg.mb_gephi, output = here('algae.gexf'))
+
+#get the modules through gephi 
+
+###
+#get hub taxa, through betweenness centrality
+###
+
+alg_between <- betweenness(alg.mb, directed = F)
+
+alg_top5_between <- sort(alg_between, decreasing = T)[1:5]
+alg_top5_between
+
+hub_taxa_alg <- subset_taxa(phy_algae, taxa_names(phy_algae) %in% names(alg_top5_between))
+tax_table(hub_taxa_alg)
+
+
+##---------
+##  Bacteria  
+##-------------------------------------------------------------------------------------------------------
+
+##---------
+##  Fungi  
+##-------------------------------------------------------------------------------------------------------
