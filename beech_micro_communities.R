@@ -1284,61 +1284,64 @@ fun_ord_plots
 ##  Algae  
 ##-------------------------------------------------------------------------------------------------------
 
-#subset dataset to ASVs that contribute at least one percent
-#to all reads of a sample
-
+# Subset the raw dataset to ASVs that contribute at least one percent to all reads of a sample.
 phy_algae_trans  = transform_sample_counts(phy_algae, function(x) x / sum(x) )
 phy_algae_abundfilt = filter_taxa(phy_algae_trans, function(x) sum(x) > .01, TRUE)
-keep_names <- taxa_names(phy_algae_abundfilt)
+keep_names_alg <- taxa_names(phy_algae_abundfilt)
 
-my_subset <- subset(otu_table(phy_algae), rownames(otu_table(phy_algae)) %in% keep_names)
-phy_algae_raw_abundfilt <- merge_phyloseq(my_subset, tax_table(phy_algae), sample_data(phy_algae))
+algae_subset <- subset(otu_table(phy_algae), rownames(otu_table(phy_algae)) %in% keep_names_alg)
+phy_algae_raw_abundfilt <- merge_phyloseq(algae_subset, tax_table(phy_algae), sample_data(phy_algae))
 
-
-
+# Save the phyloseq object to run the network inference on the server.
 saveRDS(phy_algae_raw_abundfilt, 'phy_algae_raw_abundfilt.rds')
 
-# this will be done on Malloy
+# The following code is outcommented, because it is very computationally intense. Hence, we recommend to not run this on a personal computer.
+# Rather run it on a server or massive ram machine. 
+#
+# Load the necessary package on the servers R installation.
 # library(SpiecEasi)
 # 
+# Import the saved phyloseq object.
 # phy_algae_raw_abundfilt <- readRDS('phy_algae_raw_abundfilt.rds')
 # 
+# Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
 # pargs2 <- list(rep.num=50, seed=10010, ncores=20)
 # 
+# Run the main Spiec-Easi algorithm.
 # se_alg_raw_abundfilt <- spiec.easi(phy_algae_raw_abundfilt, method='mb', 
 #                                    lambda.min.ratio=1e-1, nlambda=100, 
 #                                    sel.criterion='bstars', pulsar.select=TRUE,
 #                                    pulsar.params=pargs2)
 # 
+# Save the network and continue working on the local computer.
 # saveRDS(se_alg_raw_abundfilt, 'se_alg_raw_abundfilt.rds')
 
-# now back to local R for plotting the network
-
+# Import the network and turn it into an igraph object for further processing.
 se_alg_raw_abundfilt <- readRDS(here('se_alg_raw_abundfilt.rds'))
 alg.mb <- adj2igraph(getRefit(se_alg_raw_abundfilt),  
                      vertex.attr=list(name=taxa_names(phy_algae_raw_abundfilt)))
 
+# Obtain the networks stability to judge good fit. Close to 0.05 is good. 
+getStability(se_alg_raw_abundfilt)
+
 ###
-#plot the network
+# Plot the network.
 ###
 
-# convert to gephi 
-
+# First we need to convert it to a gephi readable format. 
 alg.mb_gephi <- igraph.to.gexf(alg.mb)
 
 write.gexf(alg.mb_gephi, output = here('algae.gexf'))
 
-#get the modules through gephi 
+# Export the network and read it into Gephi. Then obtain the modules and do the plotting.
 
-###
-#get hub taxa, through betweenness centrality
-###
-
+# Get each taxas, betweenness centrality values.
 alg_between <- betweenness(alg.mb, directed = F)
 
+# Subset it to the top five taxa to obtain hub taxa.
 alg_top5_between <- sort(alg_between, decreasing = T)[1:5]
-alg_top5_between
 
+# Subset the phyloseq object, to only contain the hub taxa to ease displaying their taxonomy.
 hub_taxa_alg <- subset_taxa(phy_algae, taxa_names(phy_algae) %in% names(alg_top5_between))
 tax_table(hub_taxa_alg)
 
@@ -1347,6 +1350,561 @@ tax_table(hub_taxa_alg)
 ##  Bacteria  
 ##-------------------------------------------------------------------------------------------------------
 
+# Subset the raw dataset to ASVs that contribute at least one percent to all reads of a sample.
+phy_bacteria_trans  = transform_sample_counts(phy_bacteria, function(x) x / sum(x) )
+phy_bacteria_abundfilt = filter_taxa(phy_bacteria_trans, function(x) sum(x) > .01, TRUE)
+keep_names <- taxa_names(phy_bacteria_abundfilt)
+
+my_subset <- subset(otu_table(phy_bacteria), rownames(otu_table(phy_bacteria)) %in% keep_names)
+phy_bacteria_raw_abundfilt <- merge_phyloseq(my_subset, tax_table(phy_bacteria), sample_data(phy_bacteria))
+
+# Save the phyloseq object to run the network inference on the server.
+saveRDS(phy_bacteria_raw_abundfilt, 'phy_bacteria_raw_abundfilt.rds')
+
+# The following code is outcommented, because it is very computationally intense. Hence, we recommend to not run this on a personal computer.
+# Rather run it on a server or massive ram machine. 
+#
+# Load the necessary package on the servers R installation.
+# library(SpiecEasi)
+# 
+# Import the saved phyloseq object.
+# phy_bacteria_raw_abundfilt <- readRDS('phy_bacteria_raw_abundfilt.rds')
+# 
+# Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
+# pargs2 <- list(rep.num=50, seed=10010, ncores=20)
+# 
+# Run the main Spiec-Easi algorithm.
+# se_bac_raw_abundfilt <- spiec.easi(phy_bacteria_raw_abundfilt, method='mb', 
+#                                    lambda.min.ratio=1e-1, nlambda=100, 
+#                                    sel.criterion='bstars', pulsar.select=TRUE,
+#                                    pulsar.params=pargs2)
+# 
+# Save the network and continue working on the local computer.
+# saveRDS(se_bac_raw_abundfilt, 'se_bac_raw_abundfilt.rds')
+
+# Import the network and turn it into an igraph object for further processing.
+se_bac_raw_abundfilt <- readRDS(here('se_bac_raw_abundfilt.rds'))
+bac.mb <- adj2igraph(getRefit(se_bac_raw_abundfilt),  
+                     vertex.attr=list(name=taxa_names(phy_bacteria_raw_abundfilt)))
+
+# Obtain the networks stability to judge good fit. Close to 0.05 is good. 
+getStability(se_bac_raw_abundfilt)
+
+###
+#plot the network
+###
+
+# First we need to convert it to a gephi readable format. 
+
+bac.mb_gephi <- igraph.to.gexf(bac.mb)
+
+write.gexf(bac.mb_gephi, output = here('bacteria.gexf'))
+
+# Export the network and read it into Gephi. Then obtain the modules and do the plotting.
+
+# Get each taxas, betweenness centrality values.
+bac_between <- betweenness(bac.mb, directed = F)
+
+# Subset it to the top five taxa to obtain hub taxa.
+bac_top5_between <- sort(bac_between, decreasing = T)[1:5]
+
+# Subset the phyloseq object, to only contain the hub taxa to ease displaying their taxonomy.
+hub_taxa_bac <- subset_taxa(phy_bacteria, taxa_names(phy_bacteria) %in% names(bac_top5_between))
+tax_table(hub_taxa_bac)
+
 ##---------
 ##  Fungi  
 ##-------------------------------------------------------------------------------------------------------
+
+# Subset the raw dataset to ASVs that contribute at least one percent to all reads of a sample.
+phy_fungi_trans  = transform_sample_counts(phy_fungi, function(x) x / sum(x) )
+phy_fungi_abundfilt = filter_taxa(phy_fungi_trans, function(x) sum(x) > .01, TRUE)
+keep_names <- taxa_names(phy_fungi_abundfilt)
+
+my_subset <- subset(otu_table(phy_fungi), rownames(otu_table(phy_fungi)) %in% keep_names)
+phy_fungi_raw_abundfilt <- merge_phyloseq(my_subset, tax_table(phy_fungi), sample_data(phy_fungi))
+
+# Save the phyloseq object to run the network inference on the server.
+saveRDS(phy_fungi_raw_abundfilt, 'phy_fungi_raw_abundfilt.rds')
+
+# The following code is outcommented, because it is very computationally intense. Hence, we recommend to not run this on a personal computer.
+# Rather run it on a server or massive ram machine. 
+#
+# Load the necessary package on the servers R installation.
+# library(SpiecEasi)
+# 
+# Import the saved phyloseq object.
+# phy_fungi_raw_abundfilt <- readRDS('phy_fungi_raw_abundfilt.rds')
+# 
+# Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
+# pargs2 <- list(rep.num=50, seed=10010, ncores=20)
+# 
+# Run the main Spiec-Easi algorithm.
+# se_fun_raw_abundfilt <- spiec.easi(phy_fungi_raw_abundfilt, method='mb', 
+#                                    lambda.min.ratio=1e-1, nlambda=100, 
+#                                    sel.criterion='bstars', pulsar.select=TRUE,
+#                                    pulsar.params=pargs2)
+# 
+# Save the network and continue working on the local computer.
+# saveRDS(se_fun_raw_abundfilt, 'se_fun_raw_abundfilt.rds')
+
+# Import the network and turn it into an igraph object for further processing.
+se_fun_raw_abundfilt <- readRDS(here('se_fun_raw_abundfilt.rds'))
+fun.mb <- adj2igraph(getRefit(se_fun_raw_abundfilt),  
+                     vertex.attr=list(name=taxa_names(phy_fungi_raw_abundfilt)))
+
+# Obtain the networks stability to judge good fit. Close to 0.05 is good. 
+getStability(se_fun_raw_abundfilt)
+
+###
+#plot the network
+###
+
+# First we need to convert it to a gephi readable format. 
+fun.mb_gephi <- igraph.to.gexf(fun.mb)
+
+write.gexf(fun.mb_gephi, output = here('fungi.gexf'))
+
+
+# Export the network and read it into Gephi. Then obtain the modules and do the plotting.
+
+# Get each taxas, betweenness centrality values.
+fun_between <- betweenness(fun.mb, directed = F)
+
+# Subset it to the top five taxa to obtain hub taxa.
+fun_top5_between <- sort(fun_between, decreasing = T)[1:5]
+
+# Subset the phyloseq object, to only contain the hub taxa to ease displaying their taxonomy.
+hub_taxa_fun <- subset_taxa(phy_fungi, taxa_names(phy_fungi) %in% names(fun_top5_between))
+tax_table(hub_taxa_fun)
+
+#################################################################
+##                          Section 5                          ##
+##                   Inter-Group Interactions                  ##
+#################################################################
+
+# Append the ending _B to the bacterial ASV names to indicate they are bacteria.
+phy_bac_full <- phy_bacteria_raw_abundfilt
+taxa_names(phy_bac_full) <- paste0(taxa_names(phy_bac_full),'_B')
+
+# Append the ending _F to the fungal ASV names to indicate they are bacteria.
+phy_fun_full <- phy_fungi_raw_abundfilt
+taxa_names(phy_fun_full) <- paste0(taxa_names(phy_fun_full),'_F')
+
+# Append the ending _A to the algal ASV names to indicate they are bacteria.
+phy_alg_full <- phy_algae_raw_abundfilt
+taxa_names(phy_alg_full) <- paste0(taxa_names(phy_alg_full),'_A')
+
+# Deselect the Superkingdom tab.
+tax_table(phy_alg_full) <- tax_table(phy_alg_full)[,c(1,3:7)]
+
+# Set the same column names as for the other two organismal groups.
+colnames(tax_table(phy_alg_full)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus')
+rank_names(phy_alg_full)
+
+# Merge the organismal groups into one phyloseq object.
+full_physeq <- merge_phyloseq(phy_fun_full, 
+                              phy_bac_full,
+                              phy_alg_full)
+
+# Save the phyloseq object to run the network inference on the server.
+saveRDS(full_physeq, 'full_physeq.rds')
+
+# The following code is outcommented, because it is very computationally intense. Hence, we recommend to not run this on a personal computer.
+# Rather run it on a server or massive ram machine. 
+#
+# Load the necessary package on the servers R installation.
+# library(spieceasi)
+#
+# Import the saved phyloseq object.
+# full_physeq <- readRDS('full_physeq.rds')
+#
+# Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
+# pargs2 <- list(rep.num=50, seed=10010, ncores=20)
+# 
+# Run the main Spiec-Easi algorithm.
+# se_cross_raw_abundfilt <- spiec.easi(full_physeq, method='mb', 
+#                                    lambda.min.ratio=1e-1, nlambda=100, 
+#                                    sel.criterion='bstars', pulsar.select=TRUE,
+#                                    pulsar.params=pargs2)
+# 
+# Save the network and continue working on the local computer.
+# saveRDS(se_cross_raw_abundfilt, 'se_cross_raw_abundfilt.rds')
+
+# Import the network and turn it into an igraph object for further processing.
+se_cross_raw_abundfilt <- readRDS(here('se_cross_raw_abundfilt.rds'))
+cross.mb <- adj2igraph(getRefit(se_cross_raw_abundfilt),  
+                       vertex.attr=list(name=taxa_names(full_physeq)))
+
+# Obtain the networks stability to judge good fit. Close to 0.05 is good. 
+getStability(se_cross_raw_abundfilt)
+
+###
+#plot the network
+###
+
+# First we need to convert it to a gephi readable format. 
+cross.mb_gephi <- igraph.to.gexf(cross.mb)
+
+write.gexf(cross.mb_gephi, output = here('cross.gexf'))
+
+# Export the network and read it into Gephi. Then obtain the modules and do the plotting.
+
+# Get each taxas betweenness centrality values.
+cross_between <- betweenness(cross.mb, directed = F)
+
+# Subset it to the top five taxa to obtain hub taxa.
+cross_top5_between <- sort(cross_between, decreasing = T)[1:5]
+
+# Subset the phyloseq object, to only contain the hub taxa to ease displaying their taxonomy.
+hub_taxa_cross <- subset_taxa(full_physeq, taxa_names(full_physeq) %in% names(cross_top5_between))
+tax_table(hub_taxa_cross)
+
+#################################################################
+##                          Section 6                          ##
+##         Drivers of changes in community composition         ##
+#################################################################
+
+##---------
+##  Algae  
+##-------------------------------------------------------------------------------------------------------
+
+# CLR transformation of the raw data. 
+phy_algae_clr <- microbiome::transform(phy_algae, transform = 'clr')
+
+###
+##Ordination                            -
+###
+
+# Principal Component Analysis via phyloseq. RDA is the same as PCA for CLR transformed data. 
+phy_algae_ord_clr <- phyloseq::ordinate(phy_algae_clr, "RDA")
+
+# Scree plot to judge the proportion of variance explained by each Principal Components.
+phyloseq::plot_scree(phy_algae_ord_clr) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+
+# Examine eigenvalues and % prop. variance explained by the Principal Components.
+head(phy_algae_ord_clr$CA$eig)     
+
+# Normalize the eigenvalues.
+sapply(phy_algae_ord_clr$CA$eig[1:5], function(x) x / sum(phy_algae_ord_clr$CA$eig))  
+
+# Scale axes to the proportion of variance the PC explains.
+clr1 <- phy_algae_ord_clr$CA$eig[1] / sum(phy_algae_ord_clr$CA$eig)
+clr2 <- phy_algae_ord_clr$CA$eig[2] / sum(phy_algae_ord_clr$CA$eig)
+
+# Plot ordination grouped by management intensity.
+alg_ord_plot_manage <- phyloseq::plot_ordination(phy_algae_clr, phy_algae_ord_clr, type="samples", color="intensity_formi") + 
+  geom_point(size = .3) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = intensity_formi), linetype = 2) +
+  scale_colour_manual(values = ggplot2::alpha(box_cols, 0.9),
+                      name = 'Management\nIntensity',
+                      labels = c("low", "high")) +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.3),
+        axis.text = element_text(colour = 'black', size = 7),
+        axis.title = element_text(size = 7),
+        title = element_text(size = 7),
+        legend.key = element_rect('transparent'),
+        legend.key.size = unit(2, 'mm'),
+        legend.position = "left",
+        legend.background = element_rect('transparent'), 
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 7))  + 
+  labs( subtitle = '(A)')
+alg_ord_plot_manage  
+
+# Plot ordination grouped by tree size.
+alg_ord_plot_size <- phyloseq::plot_ordination(phy_algae_clr, phy_algae_ord_clr, type="samples", color="size_cat") + 
+  geom_point(size = 0.3) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = size_cat), linetype = 2) +
+  scale_colour_manual(values = ggplot2::alpha(box_cols, 0.9),
+                      name = 'Tree Size',
+                      labels = c("large", "medium", "small")) +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.3),
+        axis.text = element_text(colour = 'black', size = 7),
+        axis.title = element_text(size = 7),
+        title = element_text(size = 7),
+        legend.key = element_rect('transparent'),
+        legend.key.size = unit(2, 'mm'),
+        legend.position = "left", 
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 7),
+        legend.background = element_rect('transparent'))  + 
+  labs( subtitle = '(D)')
+alg_ord_plot_size
+
+###
+##PERMANOVA
+###
+
+# Generate the distance matrix. Euclidean distances are the choice for CLR transformed data.
+clr_dist_matrix_alg <- phyloseq::distance(phy_algae_clr, method = "euclidean") 
+
+# Run the PERMANOVA analysis thorugh vegans adonis2() including both effects of management and tree sizes.
+vegan::adonis2(clr_dist_matrix_alg ~ factor(phyloseq::sample_data(phy_algae_clr)$intensity_formi) +
+                 factor(phyloseq::sample_data(phy_algae_clr)$size_cat), by = 'margin')
+
+# Test the within group dispersion for the management intensity.
+dispr_management_alg <- vegan::betadisper(clr_dist_matrix_alg, factor(phyloseq::sample_data(phy_algae_clr)$intensity_formi))
+dispr_management_alg
+
+plot(dispr_management_alg, main = "Ordination Centroids and Dispersion Labeled: Aitchison Distance", sub = "")
+
+boxplot(dispr_management_alg, main = "", xlab = "")
+
+# Test for significant differences in dispersion.
+permutest(dispr_management_alg)
+
+
+# Test the within group dispersion for the tree sizes.
+dispr_treesize_alg <- vegan::betadisper(clr_dist_matrix_alg, factor(phyloseq::sample_data(phy_algae_clr)$size_cat))
+dispr_treesize_alg
+
+plot(dispr_treesize_alg, main = "Ordination Centroids and Dispersion Labeled: Aitchison Distance", sub = "")
+
+boxplot(dispr_treesize_alg, main = "", xlab = "")
+
+# Test for significant differences in dispersion.
+permutest(dispr_treesize_alg)
+
+##---------
+##  Bacteria  
+##-------------------------------------------------------------------------------------------------------
+
+# CLR transformation of the raw data. 
+phy_bacteria_clr <- microbiome::transform(phy_bacteria, transform = 'clr')
+
+###
+##Ordination                            -
+###
+
+# Principal Component Analysis via phyloseq. RDA is the same as PCA for CLR transformed data. 
+phy_bacteria_ord_clr <- phyloseq::ordinate(phy_bacteria_clr, "RDA")
+
+# Scree plot to judge the proportion of variance explained by each Principal Components.
+phyloseq::plot_scree(phy_bacteria_ord_clr) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+
+# Examine eigenvalues and % prop. variance explained by the Principal Components.
+head(phy_bacteria_ord_clr$CA$eig)     
+
+# Normalize the eigenvalues.
+sapply(phy_bacteria_ord_clr$CA$eig[1:5], function(x) x / sum(phy_bacteria_ord_clr$CA$eig))  
+
+# Scale axes to the proportion of variance the PC explains.
+clr1 <- phy_bacteria_ord_clr$CA$eig[1] / sum(phy_bacteria_ord_clr$CA$eig)
+clr2 <- phy_bacteria_ord_clr$CA$eig[2] / sum(phy_bacteria_ord_clr$CA$eig)
+
+# Plot ordination grouped by management intensity.
+bac_ord_plot_manage <- phyloseq::plot_ordination(phy_bacteria_clr, phy_bacteria_ord_clr, 
+                                                 type="samples", color="intensity_formi") + 
+  geom_point(size = .3) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = intensity_formi), linetype = 2) +
+  scale_colour_manual(values = ggplot2::alpha(box_cols, 0.9),
+                      name = 'Management Intensity') +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.3),
+        axis.text = element_text(colour = 'black', size = 7),
+        axis.title = element_text(size = 7),
+        title = element_text(size = 7),
+        legend.key = element_rect('transparent'),
+        legend.key.size = unit(2, 'mm'),
+        legend.position = "none",
+        legend.background = element_rect('transparent'), 
+        legend.text = element_text(size = 7),
+        legend.title = element_text(size = 9))  + 
+  labs( subtitle = '(B)')
+bac_ord_plot_manage  
+
+# Plot ordination grouped by tree size.
+bac_ord_plot_size <- phyloseq::plot_ordination(phy_bacteria_clr, phy_bacteria_ord_clr, type="samples", color="size_cat") + 
+  geom_point(size = .3) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = size_cat), linetype = 2) +
+  scale_colour_manual(values = ggplot2::alpha(box_cols, 0.9),
+                      name = 'Tree Size') +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.3),
+        axis.text = element_text(colour = 'black', size = 7),
+        axis.title = element_text(size = 7),
+        legend.key = element_rect('transparent'),
+        legend.key.size = unit(2, 'mm'),
+        legend.position = "none", 
+        legend.text = element_text(size = 7),
+        legend.title = element_text(size = 9),
+        title = element_text(size = 7),
+        legend.background = element_rect('transparent'))  + 
+  labs( subtitle = '(E)')
+bac_ord_plot_size
+
+###
+##PERMANOVA
+###
+
+# Generate the distance matrix. Euclidean distances are the choice for CLR transformed data.
+clr_dist_matrix_bac <- phyloseq::distance(phy_bacteria_clr, method = "euclidean") 
+
+# Run the PERMANOVA analysis thorugh vegans adonis2() including both effects of management and tree sizes.
+vegan::adonis2(clr_dist_matrix_bac ~ factor(phyloseq::sample_data(phy_bacteria_clr)$intensity_formi) +
+                 factor(phyloseq::sample_data(phy_bacteria_clr)$size_cat),
+               by = 'margin', 
+               permutations = 10000)
+
+# Test the within group dispersion for the management intensity.
+dispr_management_bac <- vegan::betadisper(clr_dist_matrix_bac, factor(phyloseq::sample_data(phy_bacteria_clr)$intensity_formi))
+dispr_management_bac
+
+plot(dispr_management_bac, main = "Ordination Centroids and Dispersion Labeled: Aitchison Distance", sub = "")
+
+
+boxplot(dispr_management_bac, main = "", xlab = "")
+
+# Test for significant differences in dispersion.
+permutest(dispr_management_bac, pairwise = T)
+
+# Test the within group dispersion for the tree sizes.
+dispr_treesize_bac <- vegan::betadisper(clr_dist_matrix_bac, factor(phyloseq::sample_data(phy_bacteria_clr)$size_cat))
+dispr_treesize_bac
+
+plot(dispr_treesize_bac, main = "Ordination Centroids and Dispersion Labeled: Aitchison Distance", sub = "")
+
+
+boxplot(dispr_treesize_bac, main = "", xlab = "")
+
+# Test for significant differences in dispersion.
+permutest(dispr_treesize_bac)
+
+##---------
+##  Fungi  
+##-------------------------------------------------------------------------------------------------------
+
+# CLR transformation of the raw data. 
+phy_fungi_clr <- microbiome::transform(phy_fungi, transform = 'clr')
+
+###
+##Ordination                            -
+###
+
+# Principal Component Analysis via phyloseq. RDA is the same as PCA for CLR transformed data.
+phy_fungi_ord_clr <- phyloseq::ordinate(phy_fungi_clr, "RDA")
+
+# Scree plot to judge the proportion of variance explained by each Principal Components.
+phyloseq::plot_scree(phy_fungi_ord_clr) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+
+# Examine eigenvalues and % prop. variance explained by the Principal Components.
+head(phy_fungi_ord_clr$CA$eig)     
+
+# Normalize the eigenvalues.
+sapply(phy_fungi_ord_clr$CA$eig[1:5], function(x) x / sum(phy_fungi_ord_clr$CA$eig))  
+
+# Scale axes to the proportion of variance the PC explains.
+clr1 <- phy_fungi_ord_clr$CA$eig[1] / sum(phy_fungi_ord_clr$CA$eig)
+clr2 <- phy_fungi_ord_clr$CA$eig[2] / sum(phy_fungi_ord_clr$CA$eig)
+
+# Plot ordination grouped by management intensity.
+fun_ord_plot_manage <- phyloseq::plot_ordination(phy_fungi_clr, phy_fungi_ord_clr, 
+                                                 type="samples", color="intensity_formi") + 
+  geom_point(size = .3) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = intensity_formi), linetype = 2) +
+  scale_colour_manual(values = ggplot2::alpha(box_cols, 0.9),
+                      name = 'Management Intensity') +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.3),
+        axis.text = element_text(colour = 'black', size = 7),
+        axis.title = element_text(size = 7),
+        title = element_text(size = 7),
+        legend.key = element_rect('transparent'),
+        legend.key.size = unit(2, 'mm'),
+        legend.position = "none",
+        legend.background = element_rect('transparent'), 
+        legend.text = element_blank(),
+        legend.title = element_text(size = 9))  + 
+  labs( subtitle = '(C)')
+fun_ord_plot_manage  
+
+# Plot ordination grouped by tree size.
+fun_ord_plot_size <- phyloseq::plot_ordination(phy_fungi_clr, phy_fungi_ord_clr, type="samples", color="size_cat") + 
+  geom_point(size = .3) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = size_cat), linetype = 2) +
+  scale_colour_manual(values = ggplot2::alpha(box_cols, 0.9),
+                      name = 'Tree Size') +
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black", size = 0.3),
+        axis.text = element_text(colour = 'black', size = 7),
+        axis.title = element_text(size = 7),
+        title = element_text(size = 7),
+        legend.key = element_rect('transparent'),
+        legend.key.size = unit(2, 'mm'),
+        legend.position = "none", 
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 7),
+        legend.background = element_rect('transparent'))  + 
+  labs( subtitle = '(F)')
+fun_ord_plot_size
+
+###
+##PERMANOVA
+###
+
+# Generate the distance matrix. Euclidean distances are the choice for CLR transformed data.
+clr_dist_matrix_fun <- phyloseq::distance(phy_fungi_clr, method = "euclidean") 
+
+# Run the PERMANOVA analysis thorugh vegans adonis2() including both effects of management and tree sizes.
+vegan::adonis2(clr_dist_matrix_fun ~ factor(phyloseq::sample_data(phy_fungi_clr)$intensity_formi) +
+                 factor(phyloseq::sample_data(phy_fungi_clr)$size_cat), by = 'margin',
+               permutations = 999)
+
+# Test the within group dispersion for the management intensity.
+dispr_management_fun <- vegan::betadisper(clr_dist_matrix_fun,
+                                          factor(phyloseq::sample_data(phy_fungi_clr)$intensity_formi))
+dispr_management_fun
+
+plot(dispr_management_fun, main = "Ordination Centroids and Dispersion Labeled: Aitchison Distance", sub = "")
+
+
+boxplot(dispr_management_fun, main = "", xlab = "")
+
+# Test for significant differences in dispersion.
+permutest(dispr_management_fun)
+
+# Test the within group dispersion for the tree sizes.
+dispr_treesize_fun <- vegan::betadisper(clr_dist_matrix_fun, 
+                                        factor(phyloseq::sample_data(phy_fungi_clr)$size_cat))
+dispr_treesize_fun
+
+plot(dispr_treesize_fun, main = "Ordination Centroids and Dispersion Labeled: Aitchison Distance", sub = "")
+
+
+boxplot(dispr_treesize_fun, main = "", xlab = "")
+
+# Test for significant differences in dispersion.
+permutest(dispr_treesize_fun)
