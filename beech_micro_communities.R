@@ -2244,4 +2244,86 @@ sig_aldexms_fun <- left_join(sig_aldexms_fun, taxa_info)
 
 sig_aldexms_fun
 
+#################################################################
+##                          Section 8                          ##
+##           Plotting the final figures for the paper          ##
+#################################################################
+
+##----------------------------------------------------------------
+##                      Community Barplots                       -
+##----------------------------------------------------------------
+
+# Final size tweaking of the facet labels.
+fun_ord_plots <- fun_ord_plots + theme(strip.text.x = element_text(
+  size = 6))
+
+bac_ord_plots <- bac_ord_plots + theme(strip.text.x = element_text(
+  size = 6))
+
+alg_ord_plots <- alg_ord_plots + theme(strip.text.x = element_text(
+  size = 6))
+
+# List the plots and combine them to make the final figure.
+barplots <- list(alg_ord_plots, bac_ord_plots, fun_ord_plots)
+
+finished_barplots <- gridExtra::grid.arrange(grobs = barplots, nrow = 3, ncol = 1)
+
+# Save high quality figure.
+ggsave('community_barplots.tiff', device = 'tiff', finished_barplots, width = 180, height = 267,
+       units = 'mm', dpi = 700)
+
+##----------------------------------------------------------------
+##                     Raincloud Plots                           -
+##----------------------------------------------------------------
+
+# Set the label names to large instead of big for better grammar.
+fun_rain_size <- fun_rain_size + 
+  scale_x_discrete(labels=c("big" = "large", "medium" = "medium", "small" = "small")) 
+
+bac_rain_size <- bac_rain_size + 
+  scale_x_discrete(labels=c("big" = "large", "medium" = "medium", "small" = "small"))
+
+alg_rain_size <- alg_rain_size + 
+  scale_x_discrete(labels=c("big" = "large", "medium" = "medium", "small" = "small"))
+
+# List the plots and combine them to make the final figure.
+rainclouds <- list(alg_rain_manage, bac_rain_manage, fun_rain_manage,
+                   alg_rain_size, bac_rain_size, fun_rain_size)
+
+rainclouds_finished <- gridExtra::grid.arrange(grobs = rainclouds, nrow = 2, ncol = 3)
+
+# Save high quality figure.
+ggsave('alpha_diversity_rainclouds.tiff', device = 'tiff', rainclouds_finished, width = 180,
+       units = 'mm', dpi = 700)
+
+##----------------------------------------------------------------
+##                     Ordination Plots                          -
+##----------------------------------------------------------------
+
+# Extract the legend from the Plots and store it as a ggplot object.
+size_leg <- get_legend(alg_ord_plot_size)  
+size_leg <- as_ggplot(size_leg)
+
+# Remove the legend from the Plot.
+alg_ord_plot_size <- alg_ord_plot_size + 
+  theme(legend.position = 'none')
+
+# Extract the legend from the Plots and store it as a ggplot object.
+manage_leg <- get_legend(alg_ord_plot_manage)  
+manage_leg <- as_ggplot(manage_leg)
+
+# Remove the legend from the Plot.
+alg_ord_plot_manage <- alg_ord_plot_manage + 
+  theme(legend.position = 'none')
+
+# List the plots and combine them to make the final figure.
+ordinations <- list(manage_leg, alg_ord_plot_manage, bac_ord_plot_manage, fun_ord_plot_manage, 
+                    size_leg, alg_ord_plot_size, bac_ord_plot_size, fun_ord_plot_size)
+
+ordinations_finished <- gridExtra::grid.arrange(grobs = ordinations, nrow = 2, ncol = 4,
+                                                widths = c(0.8,2,2,2))
+
+# Save high quality figure.
+ggplot2::ggsave('ordinations_2.tiff', device = "tiff", ordinations_finished, width = 180,
+                units = 'mm', dpi = 700)
 
