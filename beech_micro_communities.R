@@ -1908,3 +1908,340 @@ boxplot(dispr_treesize_fun, main = "", xlab = "")
 
 # Test for significant differences in dispersion.
 permutest(dispr_treesize_fun)
+
+#################################################################
+##                          Section 7                          ##
+##         Differential Abundance Analysis with ALDEx2         ##
+#################################################################
+
+##---------
+##  Algae  
+##-------------------------------------------------------------------------------------------------------
+
+# Extract the taxonomic information so we can later add taxonomic information to the differentially abundant taxa.
+taxa_info_alg <- data.frame(tax_table(phy_algae))
+taxa_info_alg <- taxa_info_alg %>% rownames_to_column(var = "OTU")
+
+###
+#Management intensity
+###
+
+# Using the standard ALDEx2 modules.
+aldex2_ma_alg <- ALDEx2::aldex(data.frame(phyloseq::otu_table(phy_algae)),
+                               phyloseq::sample_data(phy_algae)$intensity_formi,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_ma_alg, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexmanage_alg <- aldex2_ma_alg %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU, wi.ep, wi.eBH)
+sig_aldexmanage_alg <- left_join(sig_aldexmanage_alg, taxa_info_alg)
+
+sig_aldexmanage_alg
+
+###
+#Tree size 
+###
+
+# Subsetting the data to include only two of the tree sizes, so pairwise t.test assumptions are met.
+
+big_medium_alg <- prune_samples(sample_data(phy_algae)$size_cat %in% c("big", "medium"), phy_algae)
+
+big_small_alg <- prune_samples(sample_data(phy_algae)$size_cat %in% c("big", "small"), phy_algae)
+
+medium_small_alg <- prune_samples(sample_data(phy_algae)$size_cat %in% c("medium", "small"), phy_algae)
+
+# Pair of big and medium trees. 
+
+# Using the standard ALDEx2 modules.
+aldex2_bm_alg <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_medium_alg)),
+                               phyloseq::sample_data(big_medium_alg)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_bm_alg, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexbm_alg <- aldex2_bm_alg %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange(wi.eBH) %>%
+  dplyr::select(OTU,  wi.ep, wi.eBH) 
+sig_aldexbm_alg <- left_join(sig_aldexbm_alg, taxa_info_alg)
+
+# Pair of big and small trees. 
+
+# Using the standard ALDEx2 modules.
+aldex2_bs_alg <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_small_alg)),
+                               phyloseq::sample_data(big_small_alg)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_bs_alg, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexbs_alg <- aldex2_bs_alg %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU,  wi.ep, wi.eBH)
+sig_aldexbs_alg <- left_join(sig_aldexbs_alg, taxa_info_alg)
+
+sig_aldexbs_alg
+
+## Pair of small and medium trees. 
+
+# Using the standard ALDEx2 modules.
+aldex2_ms_alg <- ALDEx2::aldex(data.frame(phyloseq::otu_table(medium_small_alg)),
+                               phyloseq::sample_data(medium_small_alg)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_ms_alg, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexms_alg <- aldex2_ms_alg %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU, wi.ep, wi.eBH)
+sig_aldexms_alg <- left_join(sig_aldexms_alg, taxa_info_alg)
+
+sig_aldexms_alg
+
+##---------
+##  Bacteria  
+##-------------------------------------------------------------------------------------------------------
+
+# Extract the taxonomic information so we can later add taxonomic information to the differentially abundant taxa.
+taxa_info_bac <- data.frame(tax_table(phy_bacteria))
+
+taxa_info_bac <- taxa_info_bac %>% rownames_to_column(var = "OTU")
+
+###
+#Management intensity
+###
+
+# Using the standard ALDEx2 modules. 
+aldex2_ma_bac <- ALDEx2::aldex(data.frame(phyloseq::otu_table(phy_bacteria)),
+                               phyloseq::sample_data(phy_bacteria)$intensity_formi,
+                               test="t",
+                               effect = TRUE,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_ma_bac, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexmanage_bac <- aldex2_ma_bac %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange(effect, wi.eBH) %>%
+  dplyr::select(OTU, diff.btw, diff.win, effect, wi.ep, wi.eBH)
+sig_aldexmanage_bac <- left_join(sig_aldexmanage_bac, taxa_info_bac)
+
+sig_aldexmanage_bac
+
+###
+#Tree size 
+###
+
+# Subsetting the data to include only two of the tree sizes, so pairwise t.test assumptions are met.
+
+big_medium_bac <- prune_samples(sample_data(phy_bacteria)$size_cat %in% c("big", "medium"), phy_bacteria)
+
+big_small_bac <- prune_samples(sample_data(phy_bacteria)$size_cat %in% c("big", "small"), phy_bacteria)
+
+medium_small_bac <- prune_samples(sample_data(phy_bacteria)$size_cat %in% c("medium", "small"), phy_bacteria)
+
+# Pair of big and medium trees. 
+
+# Using the standard ALDEx2 modules.
+aldex2_bm_bac <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_medium_bac)),
+                               phyloseq::sample_data(big_medium_bac)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_bm_bac, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexbm_bac <- aldex2_bm_bac %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU, wi.ep, wi.eBH)
+sig_aldexbm_bac <- left_join(sig_aldexbm_bac, taxa_info_bac)
+
+sig_aldexbm_bac
+
+# Pair of big and small trees. 
+
+# Using the standard ALDEx2 modules.
+aldex2_bs_bac <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_small_bac)),
+                               phyloseq::sample_data(big_small_bac)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_bs_bac, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexbs_bac <- aldex2_bs_bac %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU,  wi.ep, wi.eBH)
+sig_aldexbs_bac <- left_join(sig_aldexbs_bac, taxa_info_bac)
+
+sig_aldexbs_bac
+
+## Pair of small and medium trees.
+
+# Using the standard ALDEx2 modules.
+aldex2_ms_bac <- ALDEx2::aldex(data.frame(phyloseq::otu_table(medium_small_bac)),
+                               phyloseq::sample_data(medium_small_bac)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_ms_bac, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexms_bac <- aldex2_ms_bac %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU,  wi.ep, wi.eBH)
+sig_aldexms_bac <- left_join(sig_aldexms_bac, taxa_info_bac)
+
+sig_aldexms_bac
+
+##---------
+##  Fungi  
+##-------------------------------------------------------------------------------------------------------
+
+# Extract the taxonomic information so we can later add taxonomic information to the differentially abundant taxa.
+taxa_info_fun <- data.frame(tax_table(phy_fungi))
+taxa_info_fun <- taxa_info_fun %>% rownames_to_column(var = "OTU")
+
+###
+#Management intensity
+###
+
+# Using the standard ALDEx2 modules.
+aldex2_ma_fun <- ALDEx2::aldex(data.frame(phyloseq::otu_table(phy_fungi)),
+                               phyloseq::sample_data(phy_fungi)$intensity_formi,
+                               test="t",
+                               effect = FALSE,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_ma_fun, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexmanage_fun <- aldex2_ma_fun %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU,  wi.ep, wi.eBH)
+sig_aldexmanage_fun <- left_join(sig_aldexmanage_fun, taxa_info_fun)
+
+sig_aldexmanage_fun
+
+###
+#Tree size 
+###
+
+# Subsetting the data to include only two of the tree sizes, so pairwise t.test assumptions are met.
+
+big_medium_fun <- prune_samples(sample_data(phy_fungi)$size_cat %in% c("big", "medium"), phy_fungi)
+
+big_small_fun <- prune_samples(sample_data(phy_fungi)$size_cat %in% c("big", "small"), phy_fungi)
+
+medium_small_fun <- prune_samples(sample_data(phy_fungi)$size_cat %in% c("medium", "small"), phy_fungi)
+
+# Pair of big and medium trees. 
+
+# Using the standard ALDEx2 modules.
+aldex2_bm_fun <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_medium_fun)),
+                               phyloseq::sample_data(big_medium_fun)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_bm_fun, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexbm_fun <- aldex2_bm_fun %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU,  wi.ep, wi.eBH)
+sig_aldexbm_fun <- left_join(sig_aldexbm_fun, taxa_info_fun)
+
+sig_aldexbm_fun
+
+# Pair of big and small trees. 
+
+# Using the standard ALDEx2 modules.
+aldex2_bs_fun <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_small_fun)),
+                               phyloseq::sample_data(big_small_fun)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_bs_fun, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexbs_fun <- aldex2_bs_fun %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU,  wi.ep, wi.eBH)
+sig_aldexbs_fun <- left_join(sig_aldexbs_fun, taxa_info_fun)
+
+sig_aldexbs_fun
+
+## Pair of small and medium trees.
+
+# Using the standard ALDEx2 modules.
+aldex2_ms_fun <- ALDEx2::aldex(data.frame(phyloseq::otu_table(medium_small_fun)),
+                               phyloseq::sample_data(medium_small_fun)$size_cat,
+                               test="t",
+                               effect = F,
+                               denom="all")
+
+# Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
+ALDEx2::aldex.plot(aldex2_ms_fun, type="MW", test="wilcox", called.cex = 1, cutoff = 0.05)
+
+# Make a table with the differentially abundant taxa with a cutoff p < 0.05.
+sig_aldexms_fun <- aldex2_ms_fun %>%
+  rownames_to_column(var = "OTU") %>%
+  filter(wi.eBH < 0.05) %>%
+  arrange( wi.eBH) %>%
+  dplyr::select(OTU,  wi.ep, wi.eBH)
+
+sig_aldexms_fun <- left_join(sig_aldexms_fun, taxa_info)
+
+sig_aldexms_fun
+
+
