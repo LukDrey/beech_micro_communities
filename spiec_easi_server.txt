@@ -1,0 +1,79 @@
+library(SpiecEasi)
+
+
+###
+#algae
+###
+
+#Import the saved phyloseq object.
+phy_algae_raw_abundfilt <- readRDS('phy_algae_raw_abundfilt.rds')
+
+#Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
+pargs2 <- list(rep.num=50, seed=10010, ncores=20)
+
+#Run the main Spiec-Easi algorithm.
+se_alg_raw_abundfilt <- spiec.easi(phy_algae_raw_abundfilt, method='mb',
+                                   lambda.min.ratio=1e-1, nlambda=100,
+                                   sel.criterion='bstars', pulsar.select=TRUE,
+                                   pulsar.params=pargs2)
+
+#Save the network and continue working on the local computer.
+saveRDS(se_alg_raw_abundfilt, 'se_alg_raw_abundfilt.rds')
+
+###
+#bacteria
+###
+
+#Import the saved phyloseq object.
+phy_bacteria_raw_abundfilt <- readRDS('phy_bacteria_raw_abundfilt.rds')
+
+#Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
+pargs2 <- list(rep.num=50, seed=10010, ncores=20)
+
+#Run the main Spiec-Easi algorithm.
+se_bac_raw_abundfilt <- spiec.easi(phy_bacteria_raw_abundfilt, method='mb',
+                                   lambda.min.ratio=1e-1, nlambda=100,
+                                   sel.criterion='bstars', pulsar.select=TRUE,
+                                   pulsar.params=pargs2)
+
+#Save the network and continue working on the local computer.
+saveRDS(se_bac_raw_abundfilt, 'se_bac_raw_abundfilt.rds')
+
+###
+#fungi
+###
+
+#Import the saved phyloseq object.
+phy_fungi_raw_abundfilt <- readRDS('phy_fungi_raw_abundfilt.rds')
+
+#Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
+pargs2 <- list(rep.num=50, seed=10010, ncores=20)
+
+#Run the main Spiec-Easi algorithm.
+se_fun_raw_abundfilt <- spiec.easi(phy_fungi_raw_abundfilt, method='mb',
+                                   lambda.min.ratio=1e-1, nlambda=100,
+                                   sel.criterion='bstars', pulsar.select=TRUE,
+                                   pulsar.params=pargs2)
+
+#Save the network and continue working on the local computer.
+saveRDS(se_fun_raw_abundfilt, 'se_fun_raw_abundfilt.rds')
+
+
+###
+#combined
+###
+
+#Import the saved phyloseq object.
+full_physeq <- readRDS('full_physeq.rds')
+
+#Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
+pargs2 <- list(rep.num=50, seed=10010, ncores=20)
+
+#Run the main Spiec-Easi algorithm.
+se_cross_raw_abundfilt <- spiec.easi(full_physeq, method='mb',
+                                   lambda.min.ratio=1e-1, nlambda=100,
+                                   sel.criterion='bstars', pulsar.select=TRUE,
+                                   pulsar.params=pargs2)
+
+#Save the network and continue working on the local computer.
+saveRDS(se_cross_raw_abundfilt, 'se_cross_raw_abundfilt.rds')
