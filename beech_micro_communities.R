@@ -31,6 +31,8 @@ library(microbiome); packageVersion("microbiome")
 
 library(fantaxtic); packageVersion("fantaxtic")
 
+library(paletteer); packageVersion("paletteer")
+
 
 ##----------------------------------------------------------------
 ##                        Custom Functions                       -
@@ -363,7 +365,7 @@ metadata$Sample_ID <- NULL
 ##---------
 
 # Keep only samples that do represent real tree swabs. Cut Controls.
-asv_algae <- ASV_table_algae_cur %>% dplyr::select(num_range('Sample_', 1:96))
+asv_algae <- ASV_table_algae_cur$curated_table %>% dplyr::select(num_range('Sample_', 1:96))
 
 
 ##---------
@@ -371,14 +373,14 @@ asv_algae <- ASV_table_algae_cur %>% dplyr::select(num_range('Sample_', 1:96))
 ##---------
 
 # Keep only samples that do represent real tree swabs. Cut Controls.
-asv_bacteria <- ASV_table_bacteria_cur %>% dplyr::select(num_range('Sample_', 1:96))
+asv_bacteria <- ASV_table_bacteria_cur$curated_table %>% dplyr::select(num_range('Sample_', 1:96))
 
 ##---------
 ##  Fungi  
 ##---------
 
 # Keep only samples that do represent real tree swabs. Cut Controls. 
-asv_fungi <- ASV_table_fungi_cur %>% dplyr::select(num_range('Sample_', 1:96))
+asv_fungi <- ASV_table_fungi_cur$curated_table %>% dplyr::select(num_range('Sample_', 1:96))
 
 ##---------------------------------------------------------------
 ##                        Taxonomy Tables                       -
