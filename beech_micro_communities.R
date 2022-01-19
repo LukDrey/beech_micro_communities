@@ -1,7 +1,7 @@
 
 #########################################################################
-##  Drivers of diversity and community structure of micro-communities  ##
-##         (fungi, algae, bacteria) on the bark of beech trees         ##
+## Tree size drives diversity and community structure of microbial     ##
+## communities on the bark of beech (Fagus sylvatica)                  ##
 #########################################################################
 
 # This is the code accompanying the analysis for our Paper
@@ -106,7 +106,7 @@ class(algae_otu) <- "numeric"
 
 # Load the DNA concentration necessary for decontam (available as supplementary data). 
 algae_conc <- read.csv(here('algae_decontam_conc.csv'), header = T, sep =',')
-rownames(algae_conc) <- algae_conc$sample
+rownames(algae_conc) <- algae_conc$sample_ID
 
 # Make the parts of the phyloseq object.
 ASV_algae_decontam <- otu_table(algae_otu, taxa_are_rows = TRUE)
@@ -169,7 +169,7 @@ ASV_table_algae_cur$discarded_count
 ###
 
 # Load ASV table for fungi (available as supplementary data).
-fungi_otu <- read.csv(here('asv_table_fungi.txt'), header = F, sep = ',')
+fungi_otu <- read.csv(here('asv_table_fungi.csv'), header = F, sep = ',')
 
 # Set column names from first row. 
 colnames(fungi_otu) <- fungi_otu[1,]
@@ -190,7 +190,7 @@ class(fungi_otu) <- "numeric"
 
 # Load the DNA concentration necessary for decontam (available as supplementary data). 
 fungi_conc <- read.csv(here('fungi_decontam_conc.csv'), header = T, sep =',')
-rownames(fungi_conc) <- fungi_conc$sample
+rownames(fungi_conc) <- fungi_conc$sample_ID
 
 # Make the parts of the phyloseq object.
 ASV_fungi_decontam <- otu_table(fungi_otu, taxa_are_rows = TRUE)
@@ -254,7 +254,7 @@ ASV_table_fungi_cur$discarded_count
 ###
 
 # Load ASV table for bacteria (available as supplementary data).
-bacteria_otu <- read.csv(here('asv_table_bacteria.txt'), header = F, sep = '\t')
+bacteria_otu <- read.csv(here('asv_table_bacteria.csv'), header = F, sep = '\t')
 
 # Set column names from first row. 
 colnames(bacteria_otu) <- bacteria_otu[1,]
@@ -274,7 +274,7 @@ class(bacteria_otu) <- "numeric"
 
 # Load the DNA concentration necessary for decontam (available as supplementary data). 
 bacteria_conc <- read.csv(here('bacteria_decontam_conc.csv'), header = T, sep =',')
-rownames(bacteria_conc) <- bacteria_conc$sample
+rownames(bacteria_conc) <- bacteria_conc$sample_ID
 
 # Make the parts of the phyloseq object.
 ASV_bacteria_decontam <- otu_table(bacteria_otu, taxa_are_rows = TRUE)
@@ -407,7 +407,8 @@ asv_fungi <- ASV_table_fungi_cur$curated_table %>%
 ##---------
 
 # Load the algal taxonomy table as obtained from Seed2 and blast. 
-tax_algae <- readRDS(here('algae_tax_seed2.rds'))
+tax_algae <- read.csv("taxonomy_table_algae.csv")
+
 row.names(tax_algae) <- tax_algae$ASV_ID
 
 # Remove the unwanted columns.
@@ -418,16 +419,21 @@ tax_algae$Description <- NULL
 tax_algae$similarity <- NULL
 tax_algae$coverage <- NULL
 
+# Load algal sequences. 
+algae_seqs_fasta <- readDNAStringSet(here('ASVs_algae.fa'))
+
+# Make a dataframe of the sequences and their ASV ID. 
+seq_name_algae <- names(algae_seqs_fasta)
+sequence_algae <- paste(algae_seqs_fasta)
+algae_rep_seqs <- data.frame(seq_name_algae, sequence_algae)
+
 ##---------
 ##  Bacteria  
 ##---------
 
 # Load the bacterial taxonomy table. 
 # (Available as supplementary data)
-tax_bacteria <- readRDS(here('tax_table_bacteria.rds'))
-tax_bacteria <- as.data.frame(tax_bacteria) %>% tibble::rownames_to_column('sequence')
-tax_bacteria <- tax_bacteria %>%
-  dplyr::rename(sequence_bacteria = sequence)
+tax_bacteria <- read.csv("taxonomy_table_bacteria.csv")
 
 # Load bacterial sequences. 
 bacteria_seqs_fasta <- readDNAStringSet(here('ASVs_bacteria.fa'))
@@ -440,7 +446,7 @@ bacteria_rep_seqs <- data.frame(seq_name_bacteria, sequence_bacteria)
 # Join the taxonomy table and the representative sequences
 tax_clean_bacteria <- left_join(tax_bacteria, bacteria_rep_seqs, by = 'sequence_bacteria')
 
-# Remove the underscore to make the Sample ID the same as in the ASV table. 
+# Remove the underscore to make the ASV ID the same as in the ASV table. 
 tax_clean_bacteria$seq_name_bacteria <- gsub("_", "", tax_clean_bacteria$seq_name_bacteria)
 
 # Set rownames.
@@ -458,10 +464,7 @@ bacteria_tax_fin_raw$sequence_bacteria <- NULL
 
 # Load the fungal taxonomy table.
 # (Available as supplementary data)
-tax_fungi <- readRDS(here('tax_table_fungi.rds'))
-tax_fungi <- as.data.frame(tax_fungi) %>%
-  tibble::rownames_to_column('sequence_fungi')
-
+tax_fungi <- read.csv("taxonomy_table_fungi.csv")
 
 # Load the fungal reads.
 fungi_seqs_fasta <- readDNAStringSet(here('ASVs_fungi.fa'))
@@ -1365,7 +1368,7 @@ tax_table(hub_taxa_alg)
 ####
 
 # Read in the data on the modules obtained from Gephi.
-modules_alg <- read.csv(here('modules_algae.csv'))
+modules_alg <- read.csv(here('modules_algae.csv'), sep = ",")
 
 # Transform ASV information to dataframe to make handling easier.
 otu_tab_alg <- as.data.frame(otu_table(phy_algae_raw_abundfilt))
@@ -2204,17 +2207,31 @@ phy_mod2_ord_clean_alg <- subset_taxa(phy_mod2_ord_clean, Kingdom == 'Eukaryota'
 phy_mod2_ord_clean_bac <- subset_taxa(phy_mod2_ord_clean, Kingdom == 'Bacteria')
 phy_mod2_ord_clean_fun <- subset_taxa(phy_mod2_ord_clean, Kingdom == 'Fungi')
 
+# Relative abundance of algae, bacteria and fungi in the module.
+sum(abundances(phy_mod2_ord_clean_alg)) / sum(abundances(phy_mod2_ord_clean))
+sum(abundances(phy_mod2_ord_clean_bac)) / sum(abundances(phy_mod2_ord_clean))
+sum(abundances(phy_mod2_ord_clean_fun)) / sum(abundances(phy_mod2_ord_clean))
+
 # Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 2. 
 top_alg_mod2 <- get_top_taxa(phy_mod2_ord_clean_alg, 1, discard_other = T)
 tax_table(top_alg_mod2)
+# Relative abundance within the module.
+abundances(top_alg_mod2) / sum(abundances(phy_mod2_ord_clean))
+# Relative abundance within algae in the module. 
 abundances(top_alg_mod2) / sum(abundances(phy_mod2_ord_clean_alg))
 
 top_bac_mod2 <- get_top_taxa(phy_mod2_ord_clean_bac, 1, discard_other = T)
 tax_table(top_bac_mod2)
+# Relative abundance within the module.
+abundances(top_bac_mod2) / sum(abundances(phy_mod2_ord_clean))
+# Relative abundance within bacteria in the module. 
 abundances(top_bac_mod2) / sum(abundances(phy_mod2_ord_clean_bac))
 
 top_fun_mod2 <- get_top_taxa(phy_mod2_ord_clean_fun, 1, discard_other = T)
 tax_table(top_fun_mod2)
+# Relative abundance within the module.
+abundances(top_fun_mod2) / sum(abundances(phy_mod2_ord_clean))
+# Relative abundance within fungi in the module. 
 abundances(top_fun_mod2) / sum(abundances(phy_mod2_ord_clean_fun))
 
 # Subset Module 3 by the organismal group.
@@ -2222,17 +2239,31 @@ phy_mod3_ord_clean_alg <- subset_taxa(phy_mod3_ord_clean, Kingdom == 'Eukaryota'
 phy_mod3_ord_clean_bac <- subset_taxa(phy_mod3_ord_clean, Kingdom == 'Bacteria')
 phy_mod3_ord_clean_fun <- subset_taxa(phy_mod3_ord_clean, Kingdom == 'Fungi')
 
+# Relative abundance of algae, bacteria and fungi in the module.
+sum(abundances(phy_mod3_ord_clean_alg)) / sum(abundances(phy_mod3_ord_clean))
+sum(abundances(phy_mod3_ord_clean_bac)) / sum(abundances(phy_mod3_ord_clean))
+sum(abundances(phy_mod3_ord_clean_fun)) / sum(abundances(phy_mod3_ord_clean))
+
 # Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 3.
 top_alg_mod3 <- get_top_taxa(phy_mod3_ord_clean_alg, 1, discard_other = T)
 tax_table(top_alg_mod3)
+# Relative abundance within the module.
+abundances(top_alg_mod3) / sum(abundances(phy_mod3_ord_clean))
+# Relative abundance within algae in the module.
 abundances(top_alg_mod3) / sum(abundances(phy_mod3_ord_clean_alg))
 
 top_bac_mod3 <- get_top_taxa(phy_mod3_ord_clean_bac, 1, discard_other = T)
 tax_table(top_bac_mod3)
+# Relative abundance within the module.
+abundances(top_bac_mod3) / sum(abundances(phy_mod3_ord_clean))
+# Relative abundance within bacteria in the module.
 abundances(top_bac_mod3) / sum(abundances(phy_mod3_ord_clean_bac))
 
 top_fun_mod3 <- get_top_taxa(phy_mod3_ord_clean_fun, 1, discard_other = T)
 tax_table(top_fun_mod3)
+# Relative abundance within the module.
+abundances(top_fun_mod3) / sum(abundances(phy_mod3_ord_clean))
+# Relative abundance within fungi in the module.
 abundances(top_fun_mod3) / sum(abundances(phy_mod3_ord_clean_fun))
 
 ####
@@ -3011,7 +3042,7 @@ finished_barplots <- gridExtra::grid.arrange(grobs = barplots, nrow = 3, ncol = 
 
 # Save high quality figure.
 ggsave('community_barplots.tiff', device = 'tiff', finished_barplots, width = 180, height = 267,
-       units = 'mm', dpi = 700)
+       units = 'mm', dpi = 300)
 
 ##----------------------------------------------------------------
 ##                     Raincloud Plots                           -
@@ -3035,7 +3066,7 @@ rainclouds_finished <- gridExtra::grid.arrange(grobs = rainclouds, nrow = 2, nco
 
 # Save high quality figure.
 ggsave('alpha_diversity_rainclouds.tiff', device = 'tiff', rainclouds_finished, width = 180,
-       units = 'mm', dpi = 700)
+       units = 'mm', dpi = 300)
 
 ##----------------------------------------------------------------
 ##                     Ordination Plots                          -
@@ -3066,5 +3097,75 @@ ordinations_finished <- gridExtra::grid.arrange(grobs = ordinations, nrow = 2, n
 
 # Save high quality figure.
 ggplot2::ggsave('ordinations_2.tiff', device = "tiff", ordinations_finished, width = 180,
-                units = 'mm', dpi = 700)
+                units = 'mm', dpi = 300)
 
+
+#################################################################
+##                          Section 9                          ##
+##                  Export data for publication                ##
+#################################################################
+
+# Append the sequence information back to the phyloseq objects.
+
+###
+#Bacteria
+###
+bacteria_rep_seqs_new <- bacteria_rep_seqs
+base::rownames(bacteria_rep_seqs_new) <- bacteria_rep_seqs_new$seq_name_bacteria 
+bacteria_rep_seqs_new$seq_name_bacteria <- NULL
+seq_tax_bac_mat <- as.matrix(bacteria_rep_seqs_new)
+seq_tax_bac <- tax_table(seq_tax_bac_mat)
+
+phy_bac_complete <- phy_bacteria
+taxa_names(phy_bac_complete) <- gsub("ASV", "ASV_", taxa_names(phy_bac_complete))
+phy_bac_complete <- merge_phyloseq(phy_bac_complete, seq_tax_bac)
+colnames(tax_table(phy_bac_complete)) <- c("Kingdom", "Phylum", "Class", "Order", "Family",  "Genus", "Sequence")
+
+# Append the ending _B to the bacterial ASV names to indicate they are bacteria.
+taxa_names(phy_bac_complete) <- paste0(taxa_names(phy_bac_complete),'_B')
+
+###
+#Fungi
+###
+fungi_rep_seqs_new <- fungi_rep_seqs
+base::rownames(fungi_rep_seqs_new) <- fungi_rep_seqs_new$seq_name_fungi 
+fungi_rep_seqs_new$seq_name_fungi  <- NULL
+seq_tax_fun_mat <- as.matrix(fungi_rep_seqs_new)
+seq_tax_fun <- tax_table(seq_tax_fun_mat)
+
+phy_fun_complete <- phy_fungi
+phy_fun_complete <- merge_phyloseq(phy_fun_complete, seq_tax_fun)
+colnames(tax_table(phy_fun_complete)) <- c("Kingdom", "Phylum", "Class", "Order", "Family",  "Genus",  "Species", "Sequence")
+
+# Append the ending _F to the fungal ASV names to indicate they are bacteria.
+
+taxa_names(phy_fun_complete) <- paste0(taxa_names(phy_fun_complete),'_F')
+
+###
+#Algae
+###
+algae_rep_seqs_new <- algae_rep_seqs
+base::rownames(algae_rep_seqs_new) <- algae_rep_seqs_new$seq_name_algae 
+algae_rep_seqs_new$seq_name_algae   <- NULL
+seq_tax_alg_mat <- as.matrix(algae_rep_seqs_new)
+seq_tax_alg <- tax_table(seq_tax_alg_mat)
+
+phy_alg_complete <- phy_algae
+phy_alg_complete <- merge_phyloseq(phy_alg_complete, seq_tax_alg)
+colnames(tax_table(phy_alg_complete)) <- c("Kingdom", "Phylum", "Class", "Order", "Family",  "Genus", "Sequence")
+
+# Append the ending _A to the algal ASV names to indicate they are bacteria.
+
+taxa_names(phy_alg_complete) <- paste0(taxa_names(phy_alg_complete),'_A')
+
+# Merge them in one phyloseq object. 
+phy_complete <- merge_phyloseq(phy_alg_complete,
+                               phy_bac_complete,
+                               phy_fun_complete)
+
+
+# Transform the taxonomy table to a dataframe and make rownames the first column. 
+complete_taxonomy <- data.frame(tax_table(phy_complete)) %>%
+  tibble::rownames_to_column(var = "ASV_ID")
+
+write.csv(complete_taxonomy, "taxonomy_table_full.csv") 
