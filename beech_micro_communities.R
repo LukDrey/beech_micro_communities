@@ -45,6 +45,8 @@ library(vegan); packageVersion("vegan")
 
 library(ggpubr); packageVersion("ggpubr")
 
+library(tidyr); packageVersion("tidyr")
+
 ##----------------------------------------------------------------
 ##                        Custom Functions                       -
 ##----------------------------------------------------------------
@@ -71,6 +73,18 @@ my_cols <- paletteer_d('ggsci::default_igv')
 
 # Setting the colors for the raincloud plots comparing alpha diversity. 
 box_cols <- c( "#5050FFFF", "#CE3D32FF", "#008099FF")
+
+# Function to convert dataframe to FASTA file by Nicholas Hathaway (https://bootstrappers.umassmed.edu/guides/main/r_writeFasta.html)
+writeFasta<-function(data, filename){
+  fastaLines = c()
+  for (rowNum in 1:nrow(data)){
+    fastaLines = c(fastaLines, as.character(paste(">", data[rowNum,"ASV_ID"], sep = "")))
+    fastaLines = c(fastaLines,as.character(data[rowNum,"Sequence"]))
+  }
+  fileConn<-file(filename)
+  writeLines(fastaLines, fileConn)
+  close(fileConn)
+}
 
 ##################################################################
 ##                          Section 2                           ##
@@ -106,7 +120,7 @@ class(algae_otu) <- "numeric"
 
 # Load the DNA concentration necessary for decontam (available as supplementary data). 
 algae_conc <- read.csv(here('algae_decontam_conc.csv'), header = T, sep =',')
-rownames(algae_conc) <- algae_conc$sample_ID
+rownames(algae_conc) <- algae_conc$sample
 
 # Make the parts of the phyloseq object.
 ASV_algae_decontam <- otu_table(algae_otu, taxa_are_rows = TRUE)
@@ -190,7 +204,7 @@ class(fungi_otu) <- "numeric"
 
 # Load the DNA concentration necessary for decontam (available as supplementary data). 
 fungi_conc <- read.csv(here('fungi_decontam_conc.csv'), header = T, sep =',')
-rownames(fungi_conc) <- fungi_conc$sample_ID
+rownames(fungi_conc) <- fungi_conc$sample
 
 # Make the parts of the phyloseq object.
 ASV_fungi_decontam <- otu_table(fungi_otu, taxa_are_rows = TRUE)
@@ -254,7 +268,7 @@ ASV_table_fungi_cur$discarded_count
 ###
 
 # Load ASV table for bacteria (available as supplementary data).
-bacteria_otu <- read.csv(here('asv_table_bacteria.csv'), header = F, sep = '\t')
+bacteria_otu <- read.csv(here('asv_table_bacteria.csv'), header = F, sep = ',')
 
 # Set column names from first row. 
 colnames(bacteria_otu) <- bacteria_otu[1,]
@@ -274,7 +288,7 @@ class(bacteria_otu) <- "numeric"
 
 # Load the DNA concentration necessary for decontam (available as supplementary data). 
 bacteria_conc <- read.csv(here('bacteria_decontam_conc.csv'), header = T, sep =',')
-rownames(bacteria_conc) <- bacteria_conc$sample_ID
+rownames(bacteria_conc) <- bacteria_conc$sample
 
 # Make the parts of the phyloseq object.
 ASV_bacteria_decontam <- otu_table(bacteria_otu, taxa_are_rows = TRUE)
@@ -381,6 +395,25 @@ metadata$Sample_ID <- NULL
 asv_algae <- ASV_table_algae_cur$curated_table %>% 
   dplyr::select(num_range('Sample_', 1:96))
 
+# Keep blanks and PCR negatives to calculate average/min/max read numbers.
+asv_negatives_alg <- ASV_table_algae_cur$curated_table %>% 
+  dplyr::select(num_range('Sample_PCN_', 1:8))
+
+asv_blanks_alg <- ASV_table_algae_cur$curated_table %>% 
+  dplyr::select(num_range('Sample_BL_', 1:6))
+
+# Calculate total/average/min/max read numbers of negatives and blanks.
+
+sum(colSums(asv_negatives_alg))
+mean(colSums(asv_negatives_alg))
+min(colSums(asv_negatives_alg))
+max(colSums(asv_negatives_alg))
+
+sum(colSums(asv_blanks_alg))
+mean(colSums(asv_blanks_alg))
+min(colSums(asv_blanks_alg))
+max(colSums(asv_blanks_alg))
+
 
 ##---------
 ##  Bacteria  
@@ -390,6 +423,25 @@ asv_algae <- ASV_table_algae_cur$curated_table %>%
 asv_bacteria <- ASV_table_bacteria_cur$curated_table %>%
   dplyr::select(num_range('Sample_', 1:96))
 
+# Keep blanks and PCR negatives to calculate average/min/max read numbers.
+asv_negatives_bac <- ASV_table_bacteria_cur$curated_table %>% 
+  dplyr::select(num_range('Sample_PCN_', 1:8))
+
+asv_blanks_bac <- ASV_table_bacteria_cur$curated_table %>% 
+  dplyr::select(num_range('Sample_BL_', 1:6))
+
+# Calculate total/average/min/max read numbers of negatives and blanks.
+
+sum(colSums(asv_negatives_bac))
+mean(colSums(asv_negatives_bac))
+min(colSums(asv_negatives_bac))
+max(colSums(asv_negatives_bac))
+
+sum(colSums(asv_blanks_bac))
+mean(colSums(asv_blanks_bac))
+min(colSums(asv_blanks_bac))
+max(colSums(asv_blanks_bac))
+
 ##---------
 ##  Fungi  
 ##---------
@@ -397,6 +449,25 @@ asv_bacteria <- ASV_table_bacteria_cur$curated_table %>%
 # Keep only samples that do represent real tree swabs. Cut Controls. 
 asv_fungi <- ASV_table_fungi_cur$curated_table %>%
   dplyr::select(num_range('Sample_', 1:96))
+
+# Keep blanks and PCR negatives to calculate average/min/max read numbers.
+asv_negatives_fun <- ASV_table_fungi_cur$curated_table %>% 
+  dplyr::select(num_range('Sample_PCN_', 1:8))
+
+asv_blanks_fun <- ASV_table_fungi_cur$curated_table %>% 
+  dplyr::select(num_range('Sample_BL_', 1:6))
+
+# Calculate total/average/min/max read numbers of negatives and blanks.
+
+sum(colSums(asv_negatives_fun))
+mean(colSums(asv_negatives_fun))
+min(colSums(asv_negatives_fun))
+max(colSums(asv_negatives_fun))
+
+sum(colSums(asv_blanks_fun))
+mean(colSums(asv_blanks_fun))
+min(colSums(asv_blanks_fun))
+max(colSums(asv_blanks_fun))
 
 ##---------------------------------------------------------------
 ##                        Taxonomy Tables                       -
@@ -407,17 +478,37 @@ asv_fungi <- ASV_table_fungi_cur$curated_table %>%
 ##---------
 
 # Load the algal taxonomy table as obtained from Seed2 and blast. 
-tax_algae <- read.csv("taxonomy_table_algae.csv")
+algae_tax_table <- read.csv(here('20220330_seed_taxonomy.txt'), sep = '\t', dec = ',')
 
-row.names(tax_algae) <- tax_algae$ASV_ID
+# Select the needed columns.
+algae_tax_clean <- dplyr::select(algae_tax_table, 'SEQ.TITLE', 'Description', 'Similarity...', 'Coverage...', 'superkingdom', 'kingdom',
+                                 'phylum', 'class', 'order', 'family', 'genus')
+
+# Get the species name from the description column and rename the ASV column.
+algae_tax_clean <- algae_tax_clean %>% 
+  dplyr::mutate(species = stringr::word(algae_tax_clean$Description, 1,2, sep = ' ')) %>%
+  dplyr::rename(ASV_ID = SEQ.TITLE, 
+                similarity = Similarity...,
+                coverage = Coverage...)
+
+row.names(algae_tax_clean) <- algae_tax_clean$ASV_ID
 
 # Remove the unwanted columns.
-tax_algae$X <- NULL
-tax_algae$sequence <- NULL
-tax_algae$ASV_ID <- NULL
-tax_algae$Description <- NULL
-tax_algae$similarity <- NULL
-tax_algae$coverage <- NULL
+algae_tax_clean$X <- NULL
+algae_tax_clean$sequence <- NULL
+algae_tax_clean$ASV_ID <- NULL
+algae_tax_clean$Description <- NULL
+algae_tax_clean$similarity <- NULL
+algae_tax_clean$coverage <- NULL
+
+# Remove the Kingdom column. 
+
+algae_tax_clean$kingdom <- NULL
+
+# Rename the superkingdom column.
+
+algae_tax_clean <- algae_tax_clean %>%
+  dplyr::rename(kingdom = superkingdom)
 
 # Load algal sequences. 
 algae_seqs_fasta <- readDNAStringSet(here('ASVs_algae.fa'))
@@ -453,7 +544,9 @@ tax_clean_bacteria$seq_name_bacteria <- gsub("_", "", tax_clean_bacteria$seq_nam
 row.names(tax_clean_bacteria) <- tax_clean_bacteria$seq_name_bacteria
 
 # Remove any Chloroplast Sequences
-bacteria_tax_fin_raw <- dplyr::filter(tax_clean_bacteria, Order != 'Chloroplast')
+bacteria_tax_fin_raw <- tax_clean_bacteria %>%
+  dplyr::filter(is.na(Order) | Order != 'Chloroplast') %>%
+  dplyr::filter(is.na(Family) | Family != 'Mitochondria')
 
 bacteria_tax_fin_raw$seq_name_bacteria <- NULL
 bacteria_tax_fin_raw$sequence_bacteria <- NULL
@@ -510,7 +603,7 @@ head(fungi_tax_fin_assigned)
 asvmat_algae <- as.matrix(asv_algae) 
 
 # Transform dataframe to matrix.
-taxmat_algae <- as.matrix(tax_algae) 
+taxmat_algae <- as.matrix(algae_tax_clean) 
 
 # Create ASV table for phyloseq.
 ASV_ALG <- otu_table(asvmat_algae, taxa_are_rows = T)
@@ -526,9 +619,9 @@ phy_algae <- phyloseq(ASV_ALG, TAX_ALG, sampledata)
 phy_algae
 
 # Seed2 gives slightly different Taxonomy levels. We correct this here.
-tax_table(phy_algae) <- tax_table(phy_algae)[,c(1,3:7)]
+tax_table(phy_algae) <- tax_table(phy_algae)[,c(1:7)]
 
-colnames(tax_table(phy_algae)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus')
+colnames(tax_table(phy_algae)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus', "Species")
 rank_names(phy_algae)
 
 ##---------
@@ -539,7 +632,7 @@ rank_names(phy_algae)
 asvmat_bacteria <- as.matrix(asv_bacteria) 
 
 # Transform dataframe to matrix.
-taxmat_bacteria <- as.matrix(bacteria_tax_fin_raw) 
+taxmat_bacteria <- as.matrix(bacteria_tax_fin_raw)
 
 # Create OTU table for phyloseq.
 ASV_BAC <- otu_table(asvmat_bacteria, taxa_are_rows = T) 
@@ -585,6 +678,18 @@ phy_fungi
 ##---------
 ##  Algae  
 ##---------
+
+
+###
+#Most Common Taxa 
+###
+
+phy_alg_top3 <- get_top_taxa(phy_algae, 3,
+                                  relative = TRUE,
+                                  other_label = "Others")
+tax_table(phy_alg_top3)
+taxa_sums(phy_alg_top3)
+taxa_sums(phy_alg_top3)/sum(taxa_sums(phy_algae))
 
 ###
 #Alpha Diversity 
@@ -828,6 +933,21 @@ alg_ord_plots
 ##  Bacteria  
 ##-------------------------------------------------------------------------------------------------------
 
+###
+#Most Common Taxa 
+###
+
+phy_bac_top3 <- get_top_taxa(phy_bacteria, 3,
+                             relative = TRUE,
+                             other_label = "Others")
+tax_table(phy_bac_top3)
+taxa_sums(phy_bac_top3)
+taxa_sums(phy_bac_top3)/sum(taxa_sums(phy_bacteria))
+
+###
+#Alpha Diversity 
+###
+
 # Calculate the Shannon Diversity.
 shannon_bac <- estimate_richness(phy_bacteria, split = T, measures = 'Shannon')
 
@@ -1063,6 +1183,21 @@ bac_ord_plots
 ##---------
 ##  Fungi  
 ##----------------------------------------------------------------------------------------------
+
+###
+#Most Common Taxa 
+###
+
+phy_fun_top3 <- get_top_taxa(phy_fungi, 3,
+                             relative = TRUE,
+                             other_label = "Others")
+tax_table(phy_fun_top3)
+taxa_sums(phy_fun_top3)
+taxa_sums(phy_fun_top3)/sum(taxa_sums(phy_fungi))
+
+###
+#Alpha Diversity 
+###
 
 # Calculate the Shannon Diversity.
 shannon_fun <- estimate_richness(phy_fungi, split = T, measures = 'Shannon')
@@ -1510,7 +1645,7 @@ saveRDS(phy_bacteria_raw_abundfilt, 'phy_bacteria_raw_abundfilt.rds')
 # saveRDS(se_bac_raw_abundfilt, 'se_bac_raw_abundfilt.rds')
 
 # Import the network and turn it into an igraph object for further processing.
-se_bac_raw_abundfilt <- readRDS(here('se_bac_raw_abundfilt.rds'))
+se_bac_raw_abundfilt <- readRDS(here('se_bac_raw_abundfilt2.rds'))
 bac.mb <- adj2igraph(getRefit(se_bac_raw_abundfilt),  
                      vertex.attr=list(name=taxa_names(phy_bacteria_raw_abundfilt)))
 
@@ -1562,13 +1697,13 @@ otu_modules_bac <- inner_join(otu_tab_bac, modules_bac)
 
 # Initiate an empty dataframe were we can store the total read counts per module.
 otu_mod_bac <- data.frame(Label = otu_modules_bac$Label,
-                          Mod0 = rep(0, 628),
-                          Mod1 = rep(0, 628),
-                          Mod2 = rep(0, 628),
-                          Mod3 = rep(0, 628),
-                          Mod4 = rep(0, 628),
-                          Mod5 = rep(0, 628),
-                          Mod6 = rep(0, 628))
+                          Mod0 = rep(0, 621),
+                          Mod1 = rep(0, 621),
+                          Mod2 = rep(0, 621),
+                          Mod3 = rep(0, 621),
+                          Mod4 = rep(0, 621),
+                          Mod5 = rep(0, 621),
+                          Mod6 = rep(0, 621))
 
 # If the ASV belongs to a module then write its read count, if not write zero. 
 otu_mod_bac$Mod0 <- if_else(otu_modules_bac$modularity_class == 0, otu_modules_bac$total, 0)
@@ -1903,7 +2038,7 @@ saveRDS(full_physeq, 'full_physeq.rds')
 # saveRDS(se_cross_raw_abundfilt, 'se_cross_raw_abundfilt.rds')
 
 # Import the network and turn it into an igraph object for further processing.
-se_cross_raw_abundfilt <- readRDS(here('se_cross_raw_abundfilt.rds'))
+se_cross_raw_abundfilt <- readRDS(here('se_cross_raw_abundfilt2.rds'))
 cross.mb <- adj2igraph(getRefit(se_cross_raw_abundfilt),  
                        vertex.attr=list(name=taxa_names(full_physeq)))
 
@@ -2016,14 +2151,14 @@ otu_modules_bac <- inner_join(otu_abundance_bac, modules)
 
 # Initiate an empty dataframe were we can store the total read counts per module.
 otu_tab_mod_bac <- data.frame(Label = otu_modules_bac$Label,
-                              Mod0 = rep(0,628),
-                              Mod1 = rep(0,628),
-                              Mod2 = rep(0,628),
-                              Mod3 = rep(0,628),
-                              Mod4 = rep(0,628),
-                              Mod5 = rep(0,628),
-                              Mod6 = rep(0,628),
-                              Mod7 = rep(0,628))
+                              Mod0 = rep(0,622),
+                              Mod1 = rep(0,622),
+                              Mod2 = rep(0,622),
+                              Mod3 = rep(0,622),
+                              Mod4 = rep(0,622),
+                              Mod5 = rep(0,622),
+                              Mod6 = rep(0,622),
+                              Mod7 = rep(0,622))
 
 # If the ASV belongs to a module then write its read count, if not write zero. 
 otu_tab_mod_bac$Mod0 <- if_else(otu_modules_bac$modularity_class == 0, otu_modules_bac$total, 0)
@@ -2145,14 +2280,14 @@ full_modules <- left_join(otu_full, modules)
 
 # Initiate an empty dataframe were we can store the total read counts per module.
 otu_tab_mod <- data.frame(Label = full_modules$Label,
-                          Mod0 = rep(0,1046),
-                          Mod1 = rep(0,1046),
-                          Mod2 = rep(0,1046),
-                          Mod3 = rep(0,1046),
-                          Mod4 = rep(0,1046),
-                          Mod5 = rep(0,1046),
-                          Mod6 = rep(0,1046),
-                          Mod7 = rep(0,1046))
+                          Mod0 = rep(0,1042),
+                          Mod1 = rep(0,1042),
+                          Mod2 = rep(0,1042),
+                          Mod3 = rep(0,1042),
+                          Mod4 = rep(0,1042),
+                          Mod5 = rep(0,1042),
+                          Mod6 = rep(0,1042),
+                          Mod7 = rep(0,1042))
 
 
 # If the ASV belongs to a module then write its read count, if not write zero. 
@@ -2180,7 +2315,7 @@ phy_modules <- phyloseq(OTU, TAX)
 
 # Aggregate on Order level.
 phy_modules_ord <- phy_modules %>%
-  aggregate_taxa('Order')
+  aggregate_taxa(level = "Order")
 
 # Subset by Module name.
 phy_mod0_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod0', phy_modules_ord)
@@ -2549,7 +2684,7 @@ plot(dispr_management_bac, main = "Ordination Centroids and Dispersion Labeled: 
 boxplot(dispr_management_bac, main = "", xlab = "")
 
 # Test for significant differences in dispersion.
-permutest(dispr_management_bac, pairwise = T)
+permutest(dispr_management_bac)
 
 # Test the within group dispersion for the tree sizes.
 dispr_treesize_bac <- vegan::betadisper(clr_dist_matrix_bac, factor(phyloseq::sample_data(phy_bacteria_clr)$size_cat))
@@ -3169,3 +3304,49 @@ complete_taxonomy <- data.frame(tax_table(phy_complete)) %>%
   tibble::rownames_to_column(var = "ASV_ID")
 
 write.csv(complete_taxonomy, "taxonomy_table_full.csv") 
+
+# Make a FASTA file from the phyloseq objects of the three organismal groups for upload to Genbank.
+
+###
+#Algae
+###
+
+# Make a dataframe from the phyloseq object and remove unnecessary taxonomic information. 
+
+algae_sequences_NCBI <- data.frame(tax_table(phy_alg_complete)) %>%
+  tibble::rownames_to_column(var = "ASV_ID") %>%
+  dplyr::select(ASV_ID, sequence_algae)
+
+# Write to FASTA file format. 
+
+writeFasta(algae_sequences_NCBI, "algae_sequences_NCBI.fasta")
+
+
+###
+#Bacteria
+###
+
+# Make a dataframe from the phyloseq object and remove unnecessary taxonomic information. 
+
+bacteria_sequences_NCBI <- data.frame(tax_table(phy_bac_complete)) %>%
+  tibble::rownames_to_column(var = "ASV_ID") %>%
+  dplyr::select(ASV_ID, Sequence)
+
+# Write to FASTA file format. 
+
+writeFasta(bacteria_sequences_NCBI, "bacteria_sequences_NCBI.fasta")
+
+###
+#Fungi
+###
+
+# Make a dataframe from the phyloseq object and remove unnecessary taxonomic information. 
+
+fungi_sequences_NCBI <- data.frame(tax_table(phy_fun_complete)) %>%
+  tibble::rownames_to_column(var = "ASV_ID") %>%
+  dplyr::select(ASV_ID, Sequence)
+
+# Write to FASTA file format. 
+
+writeFasta(fungi_sequences_NCBI, "fungi_sequences_NCBI.fasta")
+
