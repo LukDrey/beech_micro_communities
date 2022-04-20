@@ -21,8 +21,6 @@ library(decontam); packageVersion("decontam")
 
 library(phyloseq); packageVersion("phyloseq")
 
-library(ggplot2); packageVersion("ggplot2")
-
 library(lulu); packageVersion("lulu")
 
 library(Biostrings); packageVersion("Biostrings")
@@ -390,7 +388,7 @@ asv_fungi <- ASV_table_fungi_cur %>% dplyr::select(num_range('Sample_', 1:96))
 tax_algae <- readRDS(here('algae_tax_seed2.rds'))
 row.names(tax_algae) <- tax_algae$ASV_ID
 
-# Load bacterial sequences. 
+# Load algal sequences. 
 algae_seqs_fasta <- readDNAStringSet(here('ASVs_algae.fa'))
 
 # Make a dataframe of the sequences and their ASV ID. 
