@@ -530,7 +530,7 @@ phy_algae
 
 # Seed2 gives slightly different Taxonomy levels. We correct this here.
 
-colnames(tax_table(phy_algae)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Sequence')
+colnames(tax_table(phy_algae)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus')
 rank_names(phy_algae)
 
 ##---------
