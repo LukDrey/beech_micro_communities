@@ -400,8 +400,8 @@ asv_fungi <- ASV_table_fungi_cur$curated_table %>% dplyr::select(num_range('Samp
 ##---------
 
 # Load the algal taxonomy table as obtained from Seed2 and blast. 
-tax_algae <- readRDS(here('algae_tax_seed2.rds'))
-row.names(tax_algae) <- tax_algae$ASV_ID
+tax_algae <- read.csv(here('seed_taxonomy.csv'), header = T, sep = "\t")
+tax_algae$ASV_ID <- gsub("_A", "", tax_algae$ASV_ID)
 
 # Load algal sequences. 
 algae_seqs_fasta <- readDNAStringSet(here('ASVs_algae.fa'))
@@ -419,12 +419,10 @@ tax_clean_algae <- left_join(tax_algae, algae_rep_seqs, by = 'ASV_ID')
 # Set rownames.
 row.names(tax_clean_algae) <- tax_clean_algae$ASV_ID
 
-# Remove the unwanted columns.
-tax_clean_algae$X <- NULL
+# Remove unwanted columns. 
+
 tax_clean_algae$ASV_ID <- NULL
-tax_clean_algae$Description <- NULL
-tax_clean_algae$similarity <- NULL
-tax_clean_algae$coverage <- NULL
+tax_clean_algae$sequence_algae <- NULL
 
 ##---------
 ##  Bacteria  
@@ -531,9 +529,8 @@ phy_algae <- phyloseq(ASV_ALG, TAX_ALG, sampledata)
 phy_algae
 
 # Seed2 gives slightly different Taxonomy levels. We correct this here.
-tax_table(phy_algae) <- tax_table(phy_algae)[,c(1,3:7)]
 
-colnames(tax_table(phy_algae)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus')
+colnames(tax_table(phy_algae)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Sequence')
 rank_names(phy_algae)
 
 ##---------
