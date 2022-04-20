@@ -53,3 +53,4 @@ If you lack the computing power to process the raw reads, the resulting ASV tabl
   - LULU https://github.com/tobiasgf/lulu
   - Biostrings https://bioconductor.org/packages/release/bioc/html/Biostrings.html
   - microbiome https://github.com/microbiome/microbiome
+  - paletteer https://github.com/EmilHvitfeldt/paletteer
