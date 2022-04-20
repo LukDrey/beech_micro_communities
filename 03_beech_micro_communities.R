@@ -14,19 +14,34 @@
 #################################################################
 
 library(here); packageVersion("here")
+"1.0.1"
 
 library(tidyverse); packageVersion("tidyverse")
+"1.3.1"
 
 library(decontam); packageVersion("decontam")
+"1.10.0"
 
 library(phyloseq); packageVersion("phyloseq")
+"1.34.0"
 
 library(lulu); packageVersion("lulu")
+"0.1.0"
 
 library(Biostrings); packageVersion("Biostrings")
+"2.58.0"
 
 library(microbiome); packageVersion("microbiome")
+"1.12.0"
 
+library(paletteer); packageVersion("paletteer")
+"1.4.0"
+
+library(fantaxtic); packageVersion("fantaxtic")
+"0.1.0"
+
+library(igraph); packageVersion("igraph")
+"1.2.11"
 
 ##----------------------------------------------------------------
 ##                        Custom Functions                       -
@@ -359,7 +374,7 @@ metadata$Sample_ID <- NULL
 ##---------
 
 # Keep only samples that do represent real tree swabs. Cut Controls.
-asv_algae <- ASV_table_algae_cur %>% dplyr::select(num_range('Sample_', 1:96))
+asv_algae <- ASV_table_algae_cur$curated_table %>% dplyr::select(num_range('Sample_', 1:96))
 
 
 ##---------
@@ -367,14 +382,14 @@ asv_algae <- ASV_table_algae_cur %>% dplyr::select(num_range('Sample_', 1:96))
 ##---------
 
 # Keep only samples that do represent real tree swabs. Cut Controls.
-asv_bacteria <- ASV_table_bacteria_cur %>% dplyr::select(num_range('Sample_', 1:96))
+asv_bacteria <- ASV_table_bacteria_cur$curated_table %>% dplyr::select(num_range('Sample_', 1:96))
 
 ##---------
 ##  Fungi  
 ##---------
 
 # Keep only samples that do represent real tree swabs. Cut Controls. 
-asv_fungi <- ASV_table_fungi_cur %>% dplyr::select(num_range('Sample_', 1:96))
+asv_fungi <- ASV_table_fungi_cur$curated_table %>% dplyr::select(num_range('Sample_', 1:96))
 
 ##---------------------------------------------------------------
 ##                        Taxonomy Tables                       -
@@ -471,22 +486,22 @@ tax_clean_fungi <- left_join(tax_fungi, fungi_rep_seqs, by = 'sequence_fungi')
 # Split the taxonomy into different columns of taxonomic levels.
 
 fungi_tax_fin <- tidyr::separate(tax_clean_fungi, Kingdom, c(NA, 'Kingdom') , sep = '__')
-fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Phylum, c(NA, 'Phylum') , sep = '__')
-fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Class, c(NA, 'Class') , sep = '__')
-fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Order, c(NA, 'Order') , sep = '__')
-fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Family, c(NA, 'Family') , sep = '__')
-fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Genus, c(NA, 'Genus') , sep = '__')
-fungi_tax_fin <- tidyr::separate(fungi_tax_fin_raw, Species, c(NA, 'Species') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin, Phylum, c(NA, 'Phylum') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin, Class, c(NA, 'Class') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin, Order, c(NA, 'Order') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin, Family, c(NA, 'Family') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin, Genus, c(NA, 'Genus') , sep = '__')
+fungi_tax_fin <- tidyr::separate(fungi_tax_fin, Species, c(NA, 'Species') , sep = '__')
 
 # Set the rownames.
 rownames(fungi_tax_fin) <- fungi_tax_fin$seq_name_fungi 
 fungi_tax_fin$seq_name_fungi <- NULL 
 
 # Remove the sequence column.
-fungi_tax_fin_raw$sequence <- NULL
+fungi_tax_fin$sequence_fungi <- NULL
 
 # Remove sequences that could not be assigned at Phylum level.
-fungi_tax_fin_assigned <- dplyr::filter(fungi_tax_fin_raw, !is.na(Phylum))
+fungi_tax_fin_assigned <- dplyr::filter(fungi_tax_fin, !is.na(Phylum))
 
 ##---------------------------------------------------------------
 ##               Create the Phyloseq Objects                    -
@@ -500,7 +515,7 @@ fungi_tax_fin_assigned <- dplyr::filter(fungi_tax_fin_raw, !is.na(Phylum))
 asvmat_algae <- as.matrix(asv_algae) 
 
 # Transform dataframe to matrix.
-taxmat_algae <- as.matrix(tax_algae) 
+taxmat_algae <- as.matrix(tax_clean_algae) 
 
 # Create ASV table for phyloseq.
 ASV_ALG <- otu_table(asvmat_algae, taxa_are_rows = T)
