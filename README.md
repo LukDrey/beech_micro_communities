@@ -1,4 +1,6 @@
 # beech_micro_communities
+![networks](https://github.com/LukDrey/beech_micro_communities/blob/main/combined_network.png)
+
 This repository contains the data and pre-processing pipeline, as well as the R script for the analysis accompanying our paper: 
 
 > Dreyling L, Schmitt I, Dal Grande F. 2022. Tree size drives diversity and community structure of microbial communities on the bark of beech (Fagus sylvatica). Frontiers in Forests and Global Change. doi: [10.3389/ffgc.2022.858382](https://www.frontiersin.org/articles/10.3389/ffgc.2022.858382/abstract).
