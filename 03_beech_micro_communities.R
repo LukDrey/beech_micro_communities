@@ -1,7 +1,6 @@
-
 #########################################################################
-##  Drivers of diversity and community structure of micro-communities  ##
-##         (fungi, algae, bacteria) on the bark of beech trees         ##
+## Tree size drives diversity and community structure of microbial     ##
+## communities on the bark of beech (Fagus sylvatica)                  ##
 #########################################################################
 
 # This is the code accompanying the analysis for our Paper
@@ -14,34 +13,36 @@
 #################################################################
 
 library(here); packageVersion("here")
-"1.0.1"
 
-library(tidyverse); packageVersion("tidyverse")
-"1.3.1"
+library(dplyr); packageVersion("dplyr")
 
 library(decontam); packageVersion("decontam")
-"1.10.0"
 
 library(phyloseq); packageVersion("phyloseq")
-"1.34.0"
+
+library(ggplot2); packageVersion("ggplot2")
 
 library(lulu); packageVersion("lulu")
-"0.1.0"
 
 library(Biostrings); packageVersion("Biostrings")
-"2.58.0"
 
 library(microbiome); packageVersion("microbiome")
-"1.12.0"
-
-library(paletteer); packageVersion("paletteer")
-"1.4.0"
 
 library(fantaxtic); packageVersion("fantaxtic")
-"0.1.0"
+
+library(paletteer); packageVersion("paletteer")
 
 library(igraph); packageVersion("igraph")
-"1.2.11"
+
+library(SpiecEasi); packageVersion("SpiecEasi")
+
+library(rgexf); packageVersion("rgexf")
+
+library(tibble); packageVersion("tibble")
+
+library(vegan); packageVersion("vegan")
+
+library(ggpubr); packageVersion("ggpubr")
 
 ##----------------------------------------------------------------
 ##                        Custom Functions                       -
@@ -226,7 +227,7 @@ ps_fungi_noncontam
 
 # Remove taxa without reads.
 ps_fungi_noncontam_pruned <- prune_taxa(taxa_sums(ps_fungi_noncontam) > 0,
-                                  ps_fungi_noncontam)
+                                        ps_fungi_noncontam)
 ASV_table_fungi <- as.data.frame(otu_table(ps_fungi_noncontam_pruned))
 fungi_matchlist <- read.table(here('match_list_fungi.txt'),
                               header = F,
@@ -291,9 +292,9 @@ ggplot(data=df_bacteria, aes(x=Index, y=LibrarySize, color=Sample_or_Control)) +
 # Decontam with combined frequency and prevalence approach. 
 sample_data(ps_bacteria_decontam)$is.neg <- sample_data(ps_bacteria_decontam)$Sample_or_Control == "Control Sample"
 contam_bacteria_combi <- isContaminant(ps_bacteria_decontam,
-                                    method = 'combined',
-                                    neg = 'is.neg',
-                                    conc = 'quant_reading')
+                                       method = 'combined',
+                                       neg = 'is.neg',
+                                       conc = 'quant_reading')
 table(contam_bacteria_combi$contaminant)
 which(contam_bacteria_combi$contaminant)
 
@@ -308,12 +309,12 @@ ps_bacteria_noncontam
 
 # Remove taxa without reads.
 ps_bacteria_noncontam_pruned <- prune_taxa(taxa_sums(ps_bacteria_noncontam) > 0,
-                                        ps_bacteria_noncontam)
+                                           ps_bacteria_noncontam)
 ASV_table_bacteria <- as.data.frame(otu_table(ps_bacteria_noncontam_pruned))
 bacteria_matchlist <- read.table(here('match_list_bacteria.txt'),
-                              header = F,
-                              as.is = T,
-                              stringsAsFactors = F)
+                                 header = F,
+                                 as.is = T,
+                                 stringsAsFactors = F)
 
 # Run the LULU algorithm. 
 
@@ -322,6 +323,8 @@ ASV_table_bacteria_cur <- lulu(ASV_table_bacteria, bacteria_matchlist)
 
 ASV_table_bacteria_cur$curated_count
 ASV_table_bacteria_cur$discarded_count
+
+
 
 ##################################################################
 ##                          Section 3                           ##
@@ -423,6 +426,9 @@ row.names(tax_clean_algae) <- tax_clean_algae$ASV_ID
 
 tax_clean_algae$ASV_ID <- NULL
 tax_clean_algae$sequence_algae <- NULL
+
+# Remove Fungi. 
+tax_clean_algae <- dplyr::filter(tax_clean_algae, kingdom != 'Fungi')
 
 ##---------
 ##  Bacteria  
@@ -907,8 +913,6 @@ bac_rain_manage <- ggplot(bacteria_sampledata, aes(x = intensity_formi, y = Shan
   scale_colour_manual(values = box_cols)
 bac_rain_manage
 
-saveRDS(bac_rain_manage, 'bac_rain_manage.rds')
-
 # Compare Tree Sizes.
 
 bac_rain_size <- ggplot(bacteria_sampledata, aes(x = size_cat, y = Shannon, fill = size_cat, colour = size_cat)) + 
@@ -1147,8 +1151,6 @@ fun_rain_manage <- ggplot(fungi_sampledata, aes(x = intensity_formi, y = Shannon
   scale_x_discrete(labels=c("low" = "low", "medium" = "high"))
 fun_rain_manage
 
-saveRDS(fun_rain_manage, 'fun_rain_manage.rds')
-
 # Compare Tree Sizes.
 fun_rain_size <- ggplot(fungi_sampledata, aes(x = size_cat, y = Shannon, fill = size_cat, colour = size_cat)) + 
   ## add half-violin from {ggdist} package
@@ -1251,8 +1253,6 @@ phy_fun_ord_top25_plot <-  phy_fun_ord_top25 %>%
 taxa_names(phy_fun_ord_top25_plot) <- tax_table(phy_fun_ord_top25_plot)[, 4]
 
 # Turn the columns necessary for the ploting into sorted factors to set the order they are plotted in.
-sample_data(phy_fun_ord_top25_plot)$intensity_formi_f <- factor(sample_data(phy_fun_ord_top25_plot)$intensity_formi, 
-                                                                levels = c("low", "high")) 
 sample_data(phy_fun_ord_top25_plot)$Plot_ID <- factor(sample_data(phy_fun_ord_top25_plot)$Plot_ID,
                                                       levels = c('HEW5', 'HEW11', 'HEW20', 'HEW27', 'HEW34','HEW35','HEW36','HEW37',
                                                                  'HEW8','HEW26','HEW28','HEW31','HEW32','HEW33','HEW43','HEW49')) 
@@ -1334,8 +1334,8 @@ saveRDS(phy_algae_raw_abundfilt, 'phy_algae_raw_abundfilt.rds')
 # pargs2 <- list(rep.num=50, seed=10010, ncores=20)
 # 
 # Run the main Spiec-Easi algorithm.
-# se_alg_raw_abundfilt <- spiec.easi(phy_algae_raw_abundfilt, method='mb', 
-#                                    lambda.min.ratio=1e-1, nlambda=100, 
+# se_alg_raw_abundfilt <- spiec.easi(phy_algae_raw_abundfilt, method='mb',
+#                                    lambda.min.ratio=1e-1, nlambda=100,
 #                                    sel.criterion='bstars', pulsar.select=TRUE,
 #                                    pulsar.params=pargs2)
 # 
@@ -1371,6 +1371,115 @@ alg_top5_between <- sort(alg_between, decreasing = T)[1:5]
 hub_taxa_alg <- subset_taxa(phy_algae, taxa_names(phy_algae) %in% names(alg_top5_between))
 tax_table(hub_taxa_alg)
 
+####
+#Module composition
+####
+
+# Read in the data on the modules obtained from Gephi.
+modules_alg <- read.csv(here('modules_algae.csv'), sep = ",")
+
+# Transform ASV information to dataframe to make handling easier.
+otu_tab_alg <- as.data.frame(otu_table(phy_algae_raw_abundfilt))
+
+# Calculate the total read count of each ASV.
+otu_tab_alg$total <- rowSums(otu_tab_alg)
+
+# Keep only the total read count.
+otu_tab_alg <- otu_tab_alg %>% 
+  select(.,total) %>%
+  rownames_to_column('Label')
+
+# Merge module table and read count information.
+otu_modules_alg <- inner_join(otu_tab_alg, modules_alg)
+
+# Initiate an empty dataframe were we can store the total read counts per module.
+otu_mod_alg <- data.frame(Label = otu_modules_alg$Label,
+                              Mod0 = rep(0, 129),
+                              Mod1 = rep(0, 129),
+                              Mod2 = rep(0, 129),
+                              Mod3 = rep(0, 129),
+                              Mod4 = rep(0, 129),
+                              Mod5 = rep(0, 129),
+                              Mod6 = rep(0, 129),
+                              Mod7 = rep(0, 129),
+                              Mod8 = rep(0, 129),
+                              Mod9 = rep(0, 129),
+                              Mod11 = rep(0, 129))
+
+# If the ASV belongs to a module then write its read count, if not write zero. 
+otu_mod_alg$Mod0 <- if_else(otu_modules_alg$modularity_class == 0, otu_modules_alg$total, 0)
+otu_mod_alg$Mod1 <- if_else(otu_modules_alg$modularity_class == 1, otu_modules_alg$total, 0)
+otu_mod_alg$Mod2 <- if_else(otu_modules_alg$modularity_class == 2, otu_modules_alg$total, 0)
+otu_mod_alg$Mod3 <- if_else(otu_modules_alg$modularity_class == 3, otu_modules_alg$total, 0)
+otu_mod_alg$Mod4 <- if_else(otu_modules_alg$modularity_class == 4, otu_modules_alg$total, 0)
+otu_mod_alg$Mod5 <- if_else(otu_modules_alg$modularity_class == 5, otu_modules_alg$total, 0)
+otu_mod_alg$Mod6 <- if_else(otu_modules_alg$modularity_class == 6, otu_modules_alg$total, 0)
+otu_mod_alg$Mod7 <- if_else(otu_modules_alg$modularity_class == 7, otu_modules_alg$total, 0)
+otu_mod_alg$Mod8 <- if_else(otu_modules_alg$modularity_class == 8, otu_modules_alg$total, 0)
+otu_mod_alg$Mod9 <- if_else(otu_modules_alg$modularity_class == 9, otu_modules_alg$total, 0)
+otu_mod_alg$Mod11 <- if_else(otu_modules_alg$modularity_class == 11, otu_modules_alg$total, 0)
+
+# set the ASV name back to the rownames.
+rownames(otu_mod_alg) <- otu_mod_alg$Label
+otu_mod_alg$Label <- NULL
+
+# Create the phyloseq object to easily obtain the taxonomic information.
+otu_mat_mod_alg <- as.matrix(otu_mod_alg)
+tax_mat_mod_alg <- as.matrix(tax_table(phy_algae_raw_abundfilt))
+
+OTU_mod_alg <- otu_table(otu_mat_mod_alg, taxa_are_rows = T)
+TAX_mod_alg <- tax_table(tax_mat_mod_alg)
+
+phy_modules_alg <- phyloseq(OTU_mod_alg, TAX_mod_alg)
+
+# Find out which modules contain more than 10 ASVs.
+module_asv_count_alg <- colSums(otu_mat_mod_alg != 0)
+which(module_asv_count_alg > 10)
+sort(module_asv_count_alg)
+
+####
+# Find out which taxa are the top ones in the modules with more than ten ASVs.
+####
+
+# Subset by Module name.
+phy_algae_mod2 <- prune_samples(sample_names(phy_modules_alg) == 'Mod2', phy_modules_alg)
+phy_algae_mod4 <- prune_samples(sample_names(phy_modules_alg) == 'Mod4', phy_modules_alg)
+phy_algae_mod5 <- prune_samples(sample_names(phy_modules_alg) == 'Mod5', phy_modules_alg)
+phy_algae_mod7 <- prune_samples(sample_names(phy_modules_alg) == 'Mod7', phy_modules_alg)
+phy_algae_mod9 <- prune_samples(sample_names(phy_modules_alg) == 'Mod9', phy_modules_alg)
+
+# Remove any taxa without reads.
+phy_algae_mod2_clean <- prune_taxa(taxa_sums(phy_algae_mod2) > 0, phy_algae_mod2)
+phy_algae_mod4_clean <- prune_taxa(taxa_sums(phy_algae_mod4) > 0, phy_algae_mod4)
+phy_algae_mod5_clean <- prune_taxa(taxa_sums(phy_algae_mod5) > 0, phy_algae_mod5)
+phy_algae_mod7_clean <- prune_taxa(taxa_sums(phy_algae_mod7) > 0, phy_algae_mod7)
+phy_algae_mod9_clean <- prune_taxa(taxa_sums(phy_algae_mod9) > 0, phy_algae_mod9)
+
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 2. 
+top_algae_mod2 <- get_top_taxa(phy_algae_mod2_clean, 1, discard_other = T)
+tax_table(top_algae_mod2)
+abundances(top_algae_mod2) / sum(abundances(phy_algae_mod2_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 4. 
+top_algae_mod4 <- get_top_taxa(phy_algae_mod4_clean, 1, discard_other = T)
+tax_table(top_algae_mod4)
+abundances(top_algae_mod4) / sum(abundances(phy_algae_mod4_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 5. 
+top_algae_mod5 <- get_top_taxa(phy_algae_mod5_clean, 1, discard_other = T)
+tax_table(top_algae_mod5)
+abundances(top_algae_mod5) / sum(abundances(phy_algae_mod5_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 7. 
+top_algae_mod7 <- get_top_taxa(phy_algae_mod7_clean, 1, discard_other = T)
+tax_table(top_algae_mod7)
+abundances(top_algae_mod7) / sum(abundances(phy_algae_mod7_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 9. 
+top_algae_mod9 <- get_top_taxa(phy_algae_mod9_clean, 1, discard_other = T)
+tax_table(top_algae_mod9)
+abundances(top_algae_mod9) / sum(abundances(phy_algae_mod9_clean))
 
 ##---------
 ##  Bacteria  
@@ -1400,8 +1509,8 @@ saveRDS(phy_bacteria_raw_abundfilt, 'phy_bacteria_raw_abundfilt.rds')
 # pargs2 <- list(rep.num=50, seed=10010, ncores=20)
 # 
 # Run the main Spiec-Easi algorithm.
-# se_bac_raw_abundfilt <- spiec.easi(phy_bacteria_raw_abundfilt, method='mb', 
-#                                    lambda.min.ratio=1e-1, nlambda=100, 
+# se_bac_raw_abundfilt <- spiec.easi(phy_bacteria_raw_abundfilt, method='mb',
+#                                    lambda.min.ratio=1e-1, nlambda=100,
 #                                    sel.criterion='bstars', pulsar.select=TRUE,
 #                                    pulsar.params=pargs2)
 # 
@@ -1438,6 +1547,123 @@ bac_top5_between <- sort(bac_between, decreasing = T)[1:5]
 hub_taxa_bac <- subset_taxa(phy_bacteria, taxa_names(phy_bacteria) %in% names(bac_top5_between))
 tax_table(hub_taxa_bac)
 
+####
+#Module composition
+####
+
+# Read in the data on the modules obtained from Gephi.
+modules_bac <- read.csv(here('modules_bacteria.csv'))
+
+# Transform ASV information to dataframe to make handling easier.
+otu_tab_bac <- as.data.frame(otu_table(phy_bacteria_raw_abundfilt))
+
+# Calculate the total read count of each ASV.
+otu_tab_bac$total <- rowSums(otu_tab_bac)
+
+# Keep only the total read count.
+otu_tab_bac <- otu_tab_bac %>% 
+  select(.,total) %>%
+  rownames_to_column('Label')
+
+# Merge module table and read count information.
+otu_modules_bac <- inner_join(otu_tab_bac, modules_bac)
+
+# Initiate an empty dataframe were we can store the total read counts per module.
+otu_mod_bac <- data.frame(Label = otu_modules_bac$Label,
+                          Mod0 = rep(0, 628),
+                          Mod1 = rep(0, 628),
+                          Mod2 = rep(0, 628),
+                          Mod3 = rep(0, 628),
+                          Mod4 = rep(0, 628),
+                          Mod5 = rep(0, 628),
+                          Mod6 = rep(0, 628))
+
+# If the ASV belongs to a module then write its read count, if not write zero. 
+otu_mod_bac$Mod0 <- if_else(otu_modules_bac$modularity_class == 0, otu_modules_bac$total, 0)
+otu_mod_bac$Mod1 <- if_else(otu_modules_bac$modularity_class == 1, otu_modules_bac$total, 0)
+otu_mod_bac$Mod2 <- if_else(otu_modules_bac$modularity_class == 2, otu_modules_bac$total, 0)
+otu_mod_bac$Mod3 <- if_else(otu_modules_bac$modularity_class == 3, otu_modules_bac$total, 0)
+otu_mod_bac$Mod4 <- if_else(otu_modules_bac$modularity_class == 4, otu_modules_bac$total, 0)
+otu_mod_bac$Mod5 <- if_else(otu_modules_bac$modularity_class == 5, otu_modules_bac$total, 0)
+otu_mod_bac$Mod6 <- if_else(otu_modules_bac$modularity_class == 6, otu_modules_bac$total, 0)
+
+# set the ASV name back to the rownames.
+rownames(otu_mod_bac) <- otu_mod_bac$Label
+otu_mod_bac$Label <- NULL
+
+# Create the phyloseq object to easily obtain the taxonomic information.
+otu_mat_mod_bac <- as.matrix(otu_mod_bac)
+tax_mat_mod_bac <- as.matrix(tax_table(phy_bacteria_raw_abundfilt))
+
+OTU_mod_bac <- otu_table(otu_mat_mod_bac, taxa_are_rows = T)
+TAX_mod_bac <- tax_table(tax_mat_mod_bac)
+
+phy_modules_bac <- phyloseq(OTU_mod_bac, TAX_mod_bac)
+
+# Find out which modules contain more than 10 ASVs.
+module_asv_count_bac <- colSums(otu_mat_mod_bac != 0)
+which(module_asv_count_bac > 10)
+sort(module_asv_count_bac)
+
+####
+# Find out which taxa are the top ones in the modules with more than ten ASVs.
+####
+
+# Subset by Module name.
+phy_bacteria_mod0 <- prune_samples(sample_names(phy_modules_bac) == 'Mod0', phy_modules_bac)
+phy_bacteria_mod1 <- prune_samples(sample_names(phy_modules_bac) == 'Mod1', phy_modules_bac)
+phy_bacteria_mod2 <- prune_samples(sample_names(phy_modules_bac) == 'Mod2', phy_modules_bac)
+phy_bacteria_mod3 <- prune_samples(sample_names(phy_modules_bac) == 'Mod3', phy_modules_bac)
+phy_bacteria_mod4 <- prune_samples(sample_names(phy_modules_bac) == 'Mod4', phy_modules_bac)
+phy_bacteria_mod5 <- prune_samples(sample_names(phy_modules_bac) == 'Mod5', phy_modules_bac)
+phy_bacteria_mod6 <- prune_samples(sample_names(phy_modules_bac) == 'Mod6', phy_modules_bac)
+
+# Remove any taxa without reads.
+phy_bacteria_mod0_clean <- prune_taxa(taxa_sums(phy_bacteria_mod0) > 0, phy_bacteria_mod0)
+phy_bacteria_mod1_clean <- prune_taxa(taxa_sums(phy_bacteria_mod1) > 0, phy_bacteria_mod1)
+phy_bacteria_mod2_clean <- prune_taxa(taxa_sums(phy_bacteria_mod2) > 0, phy_bacteria_mod2)
+phy_bacteria_mod3_clean <- prune_taxa(taxa_sums(phy_bacteria_mod3) > 0, phy_bacteria_mod3)
+phy_bacteria_mod4_clean <- prune_taxa(taxa_sums(phy_bacteria_mod4) > 0, phy_bacteria_mod4)
+phy_bacteria_mod5_clean <- prune_taxa(taxa_sums(phy_bacteria_mod5) > 0, phy_bacteria_mod5)
+phy_bacteria_mod6_clean <- prune_taxa(taxa_sums(phy_bacteria_mod6) > 0, phy_bacteria_mod6)
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 0. 
+top_bacteria_mod0 <- get_top_taxa(phy_bacteria_mod0_clean, 1, discard_other = T)
+tax_table(top_bacteria_mod0)
+abundances(top_bacteria_mod0) / sum(abundances(phy_bacteria_mod0_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 1. 
+top_bacteria_mod1 <- get_top_taxa(phy_bacteria_mod1_clean, 1, discard_other = T)
+tax_table(top_bacteria_mod1)
+abundances(top_bacteria_mod1) / sum(abundances(phy_bacteria_mod1_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 2. 
+top_bacteria_mod2 <- get_top_taxa(phy_bacteria_mod2_clean, 1, discard_other = T)
+tax_table(top_bacteria_mod2)
+abundances(top_bacteria_mod2) / sum(abundances(phy_bacteria_mod2_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 3. 
+top_bacteria_mod3 <- get_top_taxa(phy_bacteria_mod3_clean, 1, discard_other = T)
+tax_table(top_bacteria_mod3)
+abundances(top_bacteria_mod3) / sum(abundances(phy_bacteria_mod3_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 4. 
+top_bacteria_mod4 <- get_top_taxa(phy_bacteria_mod4_clean, 1, discard_other = T)
+tax_table(top_bacteria_mod4)
+abundances(top_bacteria_mod4) / sum(abundances(phy_bacteria_mod4_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 5. 
+top_bacteria_mod5 <- get_top_taxa(phy_bacteria_mod5_clean, 1, discard_other = T)
+tax_table(top_bacteria_mod5)
+abundances(top_bacteria_mod5) / sum(abundances(phy_bacteria_mod5_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 6. 
+top_bacteria_mod6 <- get_top_taxa(phy_bacteria_mod6_clean, 1, discard_other = T)
+tax_table(top_bacteria_mod6)
+abundances(top_bacteria_mod6) / sum(abundances(phy_bacteria_mod6_clean))
+
+
+
 ##---------
 ##  Fungi  
 ##-------------------------------------------------------------------------------------------------------
@@ -1466,8 +1692,8 @@ saveRDS(phy_fungi_raw_abundfilt, 'phy_fungi_raw_abundfilt.rds')
 # pargs2 <- list(rep.num=50, seed=10010, ncores=20)
 # 
 # Run the main Spiec-Easi algorithm.
-# se_fun_raw_abundfilt <- spiec.easi(phy_fungi_raw_abundfilt, method='mb', 
-#                                    lambda.min.ratio=1e-1, nlambda=100, 
+# se_fun_raw_abundfilt <- spiec.easi(phy_fungi_raw_abundfilt, method='mb',
+#                                    lambda.min.ratio=1e-1, nlambda=100,
 #                                    sel.criterion='bstars', pulsar.select=TRUE,
 #                                    pulsar.params=pargs2)
 # 
@@ -1504,6 +1730,139 @@ fun_top5_between <- sort(fun_between, decreasing = T)[1:5]
 hub_taxa_fun <- subset_taxa(phy_fungi, taxa_names(phy_fungi) %in% names(fun_top5_between))
 tax_table(hub_taxa_fun)
 
+####
+#Module composition
+####
+
+# Read in the data on the modules obtained from Gephi.
+modules_fungi <- read.csv(here('modules_fungi.csv'))
+
+# Transform ASV information to dataframe to make handling easier.
+otu_tab_fungi <- as.data.frame(otu_table(phy_fungi_raw_abundfilt))
+
+# Calculate the total read count of each ASV.
+otu_tab_fungi$total <- rowSums(otu_tab_fungi)
+
+# Keep only the total read count.
+otu_tab_fungi <- otu_tab_fungi %>% 
+  select(.,total) %>%
+  rownames_to_column('Label')
+
+# Merge module table and read count information.
+otu_modules_fungi <- inner_join(otu_tab_fungi, modules_fungi)
+
+# Initiate an empty dataframe were we can store the total read counts per module.
+otu_mod_fungi <- data.frame(Label = otu_modules_fungi$Label,
+                          Mod0 = rep(0, 289),
+                          Mod1 = rep(0, 289),
+                          Mod2 = rep(0, 289),
+                          Mod3 = rep(0, 289),
+                          Mod4 = rep(0, 289),
+                          Mod5 = rep(0, 289),
+                          Mod6 = rep(0, 289),
+                          Mod7 = rep(0, 289),
+                          Mod8 = rep(0, 289))
+
+# If the ASV belongs to a module then write its read count, if not write zero. 
+otu_mod_fungi$Mod0 <- if_else(otu_modules_fungi$modularity_class == 0, otu_modules_fungi$total, 0)
+otu_mod_fungi$Mod1 <- if_else(otu_modules_fungi$modularity_class == 1, otu_modules_fungi$total, 0)
+otu_mod_fungi$Mod2 <- if_else(otu_modules_fungi$modularity_class == 2, otu_modules_fungi$total, 0)
+otu_mod_fungi$Mod3 <- if_else(otu_modules_fungi$modularity_class == 3, otu_modules_fungi$total, 0)
+otu_mod_fungi$Mod4 <- if_else(otu_modules_fungi$modularity_class == 4, otu_modules_fungi$total, 0)
+otu_mod_fungi$Mod5 <- if_else(otu_modules_fungi$modularity_class == 5, otu_modules_fungi$total, 0)
+otu_mod_fungi$Mod6 <- if_else(otu_modules_fungi$modularity_class == 6, otu_modules_fungi$total, 0)
+otu_mod_fungi$Mod7 <- if_else(otu_modules_fungi$modularity_class == 7, otu_modules_fungi$total, 0)
+otu_mod_fungi$Mod8 <- if_else(otu_modules_fungi$modularity_class == 8, otu_modules_fungi$total, 0)
+
+# set the ASV name back to the rownames.
+rownames(otu_mod_fungi) <- otu_mod_fungi$Label
+otu_mod_fungi$Label <- NULL
+
+# Create the phyloseq object to easily obtain the taxonomic information.
+otu_mat_mod_fungi <- as.matrix(otu_mod_fungi)
+tax_mat_mod_fungi <- as.matrix(tax_table(phy_fungi_raw_abundfilt))
+
+OTU_mod_fun <- otu_table(otu_mat_mod_fungi, taxa_are_rows = T)
+TAX_mod_fun <- tax_table(tax_mat_mod_fungi)
+
+phy_modules_fun <- phyloseq(OTU_mod_fun, TAX_mod_fun)
+
+# Find out which modules contain more than 10 ASVs.
+module_asv_count_fun <- colSums(otu_mat_mod_fungi != 0)
+which(module_asv_count_fun > 10)
+sort(module_asv_count_fun)
+
+####
+# Find out which taxa are the top ones in the modules with more than ten ASVs.
+####
+
+# Subset by Module name.
+phy_fungi_mod0 <- prune_samples(sample_names(phy_modules_fun) == 'Mod0', phy_modules_fun)
+phy_fungi_mod1 <- prune_samples(sample_names(phy_modules_fun) == 'Mod1', phy_modules_fun)
+phy_fungi_mod2 <- prune_samples(sample_names(phy_modules_fun) == 'Mod2', phy_modules_fun)
+phy_fungi_mod3 <- prune_samples(sample_names(phy_modules_fun) == 'Mod3', phy_modules_fun)
+phy_fungi_mod4 <- prune_samples(sample_names(phy_modules_fun) == 'Mod4', phy_modules_fun)
+phy_fungi_mod5 <- prune_samples(sample_names(phy_modules_fun) == 'Mod5', phy_modules_fun)
+phy_fungi_mod6 <- prune_samples(sample_names(phy_modules_fun) == 'Mod6', phy_modules_fun)
+phy_fungi_mod7 <- prune_samples(sample_names(phy_modules_fun) == 'Mod7', phy_modules_fun)
+phy_fungi_mod8 <- prune_samples(sample_names(phy_modules_fun) == 'Mod8', phy_modules_fun)
+
+# Remove any taxa without reads.
+phy_fungi_mod0_clean <- prune_taxa(taxa_sums(phy_fungi_mod0) > 0, phy_fungi_mod0)
+phy_fungi_mod1_clean <- prune_taxa(taxa_sums(phy_fungi_mod1) > 0, phy_fungi_mod1)
+phy_fungi_mod2_clean <- prune_taxa(taxa_sums(phy_fungi_mod2) > 0, phy_fungi_mod2)
+phy_fungi_mod3_clean <- prune_taxa(taxa_sums(phy_fungi_mod3) > 0, phy_fungi_mod3)
+phy_fungi_mod4_clean <- prune_taxa(taxa_sums(phy_fungi_mod4) > 0, phy_fungi_mod4)
+phy_fungi_mod5_clean <- prune_taxa(taxa_sums(phy_fungi_mod5) > 0, phy_fungi_mod5)
+phy_fungi_mod6_clean <- prune_taxa(taxa_sums(phy_fungi_mod6) > 0, phy_fungi_mod6)
+phy_fungi_mod7_clean <- prune_taxa(taxa_sums(phy_fungi_mod7) > 0, phy_fungi_mod7)
+phy_fungi_mod8_clean <- prune_taxa(taxa_sums(phy_fungi_mod8) > 0, phy_fungi_mod8)
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 0. 
+top_fungi_mod0 <- get_top_taxa(phy_fungi_mod0_clean, 1, discard_other = T)
+tax_table(top_fungi_mod0)
+abundances(top_fungi_mod0) / sum(abundances(phy_fungi_mod0_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 1. 
+top_fungi_mod1 <- get_top_taxa(phy_fungi_mod1_clean, 1, discard_other = T)
+tax_table(top_fungi_mod1)
+abundances(top_fungi_mod1) / sum(abundances(phy_fungi_mod1_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 2. 
+top_fungi_mod2 <- get_top_taxa(phy_fungi_mod2_clean, 1, discard_other = T)
+tax_table(top_fungi_mod2)
+abundances(top_fungi_mod2) / sum(abundances(phy_fungi_mod2_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 3. 
+top_fungi_mod3 <- get_top_taxa(phy_fungi_mod3_clean, 1, discard_other = T)
+tax_table(top_fungi_mod3)
+abundances(top_fungi_mod3) / sum(abundances(phy_fungi_mod3_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 4. 
+top_fungi_mod4 <- get_top_taxa(phy_fungi_mod4_clean, 1, discard_other = T)
+tax_table(top_fungi_mod4)
+abundances(top_fungi_mod4) / sum(abundances(phy_fungi_mod4_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 5. 
+top_fungi_mod5 <- get_top_taxa(phy_fungi_mod5_clean, 1, discard_other = T)
+tax_table(top_fungi_mod5)
+abundances(top_fungi_mod5) / sum(abundances(phy_fungi_mod5_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 6. 
+top_fungi_mod6 <- get_top_taxa(phy_fungi_mod6_clean, 1, discard_other = T)
+tax_table(top_fungi_mod6)
+abundances(top_fungi_mod6) / sum(abundances(phy_fungi_mod6_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 7. 
+top_fungi_mod7 <- get_top_taxa(phy_fungi_mod7_clean, 1, discard_other = T)
+tax_table(top_fungi_mod7)
+abundances(top_fungi_mod7) / sum(abundances(phy_fungi_mod7_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 8. 
+top_fungi_mod8 <- get_top_taxa(phy_fungi_mod8_clean, 1, discard_other = T)
+tax_table(top_fungi_mod8)
+abundances(top_fungi_mod8) / sum(abundances(phy_fungi_mod8_clean))
+
 #################################################################
 ##                          Section 5                          ##
 ##                   Inter-Group Interactions                  ##
@@ -1521,12 +1880,6 @@ taxa_names(phy_fun_full) <- paste0(taxa_names(phy_fun_full),'_F')
 phy_alg_full <- phy_algae_raw_abundfilt
 taxa_names(phy_alg_full) <- paste0(taxa_names(phy_alg_full),'_A')
 
-# Deselect the Superkingdom tab.
-tax_table(phy_alg_full) <- tax_table(phy_alg_full)[,c(1,3:7)]
-
-# Set the same column names as for the other two organismal groups.
-colnames(tax_table(phy_alg_full)) <- c('Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus')
-rank_names(phy_alg_full)
 
 # Merge the organismal groups into one phyloseq object.
 full_physeq <- merge_phyloseq(phy_fun_full, 
@@ -1544,13 +1897,13 @@ saveRDS(full_physeq, 'full_physeq.rds')
 #
 # Import the saved phyloseq object.
 # full_physeq <- readRDS('full_physeq.rds')
-#
+# 
 # Set the arguments for the Spiec-Easi algorithm, Note that it runs on 20 cores simultaneously. See the tutorial at https://github.com/zdk123/SpiecEasi.
 # pargs2 <- list(rep.num=50, seed=10010, ncores=20)
 # 
 # Run the main Spiec-Easi algorithm.
-# se_cross_raw_abundfilt <- spiec.easi(full_physeq, method='mb', 
-#                                    lambda.min.ratio=1e-1, nlambda=100, 
+# se_cross_raw_abundfilt <- spiec.easi(full_physeq, method='mb',
+#                                    lambda.min.ratio=1e-1, nlambda=100,
 #                                    sel.criterion='bstars', pulsar.select=TRUE,
 #                                    pulsar.params=pargs2)
 # 
@@ -1585,6 +1938,405 @@ cross_top5_between <- sort(cross_between, decreasing = T)[1:5]
 # Subset the phyloseq object, to only contain the hub taxa to ease displaying their taxonomy.
 hub_taxa_cross <- subset_taxa(full_physeq, taxa_names(full_physeq) %in% names(cross_top5_between))
 tax_table(hub_taxa_cross)
+
+####
+#Module composition
+####
+
+# Read in the data on the modules obtained from Gephi.
+modules <- read.csv(here('modules_cross.csv'))
+
+# To obtain the modules relative abundances we need all the ASV counts.
+# Append the endings _B, _F, _A to the raw reads to match the ASV names to the names used for the network.
+phy_bac_rel <- phy_bacteria
+taxa_names(phy_bac_rel) <- paste0(taxa_names(phy_bac_rel),'_B')
+
+phy_fun_rel <- phy_fungi
+taxa_names(phy_fun_rel) <- paste0(taxa_names(phy_fun_rel),'_F')
+
+phy_alg_rel <- phy_algae
+taxa_names(phy_alg_rel) <- paste0(taxa_names(phy_alg_rel),'_A')
+
+##---------
+##  Algae  
+##-------------------------------------------------------------------------------------------------------
+
+# Transform to dataframe to make handling easier.
+otu_abundance_alg <- as.data.frame(otu_table(phy_alg_rel))
+
+# Calculate the total read count of each ASV.
+otu_abundance_alg$total <- rowSums(otu_abundance_alg)
+
+# Keep only the total read count.
+otu_abundance_alg <- otu_abundance_alg %>% 
+  select(.,total) %>%
+  rownames_to_column('Label')
+
+# Merge module table and read count information.
+otu_modules_alg <- inner_join(otu_abundance_alg, modules)
+
+# Initiate an empty dataframe were we can store the total read counts per module.
+otu_tab_mod_alg <- data.frame(Label = otu_modules_alg$Label,
+                              Mod0 = rep(0,129),
+                              Mod1 = rep(0,129),
+                              Mod2 = rep(0,129),
+                              Mod3 = rep(0,129),
+                              Mod4 = rep(0,129),
+                              Mod5 = rep(0,129),
+                              Mod6 = rep(0,129),
+                              Mod7 = rep(0,129))
+
+# If the ASV belongs to a module then write its read count, if not write zero. 
+otu_tab_mod_alg$Mod0 <- if_else(otu_modules_alg$modularity_class == 0, otu_modules_alg$total, 0)
+otu_tab_mod_alg$Mod1 <- if_else(otu_modules_alg$modularity_class == 1, otu_modules_alg$total, 0)
+otu_tab_mod_alg$Mod2 <- if_else(otu_modules_alg$modularity_class == 2, otu_modules_alg$total, 0)
+otu_tab_mod_alg$Mod3 <- if_else(otu_modules_alg$modularity_class == 3, otu_modules_alg$total, 0)
+otu_tab_mod_alg$Mod4 <- if_else(otu_modules_alg$modularity_class == 4, otu_modules_alg$total, 0)
+otu_tab_mod_alg$Mod5 <- if_else(otu_modules_alg$modularity_class == 5, otu_modules_alg$total, 0)
+otu_tab_mod_alg$Mod6 <- if_else(otu_modules_alg$modularity_class == 6, otu_modules_alg$total, 0)
+otu_tab_mod_alg$Mod7 <- if_else(otu_modules_alg$modularity_class == 7, otu_modules_alg$total, 0)
+
+# set the ASV name back to the rownames.
+rownames(otu_tab_mod_alg) <- otu_tab_mod_alg$Label
+otu_tab_mod_alg$Label <- NULL
+
+# Sum up the columns to obtain module total read counts.
+algae_mod_rel <- as.data.frame(colSums(otu_tab_mod_alg))
+algae_mod_rel
+
+##---------
+##  Bacteria  
+##-------------------------------------------------------------------------------------------------------
+
+# Transform to dataframe to make handling easier.
+otu_abundance_bac <- as.data.frame(otu_table(phy_bac_rel))
+
+# Calculate the total read count of each ASV.
+otu_abundance_bac$total <- rowSums(otu_abundance_bac)
+
+# Keep only the total read count.
+otu_abundance_bac <- otu_abundance_bac %>% 
+  select(total) %>%
+  rownames_to_column('Label')
+
+# Merge module table and read count information.
+otu_modules_bac <- inner_join(otu_abundance_bac, modules)
+
+# Initiate an empty dataframe were we can store the total read counts per module.
+otu_tab_mod_bac <- data.frame(Label = otu_modules_bac$Label,
+                              Mod0 = rep(0,628),
+                              Mod1 = rep(0,628),
+                              Mod2 = rep(0,628),
+                              Mod3 = rep(0,628),
+                              Mod4 = rep(0,628),
+                              Mod5 = rep(0,628),
+                              Mod6 = rep(0,628),
+                              Mod7 = rep(0,628))
+
+# If the ASV belongs to a module then write its read count, if not write zero. 
+otu_tab_mod_bac$Mod0 <- if_else(otu_modules_bac$modularity_class == 0, otu_modules_bac$total, 0)
+otu_tab_mod_bac$Mod1 <- if_else(otu_modules_bac$modularity_class == 1, otu_modules_bac$total, 0)
+otu_tab_mod_bac$Mod2 <- if_else(otu_modules_bac$modularity_class == 2, otu_modules_bac$total, 0)
+otu_tab_mod_bac$Mod3 <- if_else(otu_modules_bac$modularity_class == 3, otu_modules_bac$total, 0)
+otu_tab_mod_bac$Mod4 <- if_else(otu_modules_bac$modularity_class == 4, otu_modules_bac$total, 0)
+otu_tab_mod_bac$Mod5 <- if_else(otu_modules_bac$modularity_class == 5, otu_modules_bac$total, 0)
+otu_tab_mod_bac$Mod6 <- if_else(otu_modules_bac$modularity_class == 6, otu_modules_bac$total, 0)
+otu_tab_mod_bac$Mod7 <- if_else(otu_modules_bac$modularity_class == 7, otu_modules_bac$total, 0)
+
+# set the ASV name back to the rownames.
+rownames(otu_tab_mod_bac) <- otu_tab_mod_bac$Label
+otu_tab_mod_bac$Label <- NULL
+
+# Sum up the columns to obtain module total read counts.
+bacteria_mod_rel <- as.data.frame(colSums(otu_tab_mod_bac))
+bacteria_mod_rel
+
+##---------
+##  Fungi  
+##-------------------------------------------------------------------------------------------------------
+
+# Transform to dataframe to make handling easier.
+otu_abundance_fun <- as.data.frame(otu_table(phy_fun_rel))
+
+# Calculate the total read count of each ASV.
+otu_abundance_fun$total <- rowSums(otu_abundance_fun)
+
+# Keep only the total read count.
+otu_abundance_fun <- otu_abundance_fun %>% 
+  select(total) %>%
+  rownames_to_column('Label')
+
+# Merge module table and read count information.
+otu_modules_fun <- inner_join(otu_abundance_fun, modules)
+
+# Initiate an empty dataframe were we can store the total read counts per module.
+otu_tab_mod_fun <- data.frame(Label = otu_modules_fun$Label,
+                              Mod0 = rep(0,289),
+                              Mod1 = rep(0,289),
+                              Mod2 = rep(0,289),
+                              Mod3 = rep(0,289),
+                              Mod4 = rep(0,289),
+                              Mod5 = rep(0,289),
+                              Mod6 = rep(0,289),
+                              Mod7 = rep(0,289))
+
+# If the ASV belongs to a module then write its read count, if not write zero. 
+otu_tab_mod_fun$Mod0 <- if_else(otu_modules_fun$modularity_class == 0, otu_modules_fun$total, 0)
+otu_tab_mod_fun$Mod1 <- if_else(otu_modules_fun$modularity_class == 1, otu_modules_fun$total, 0)
+otu_tab_mod_fun$Mod2 <- if_else(otu_modules_fun$modularity_class == 2, otu_modules_fun$total, 0)
+otu_tab_mod_fun$Mod3 <- if_else(otu_modules_fun$modularity_class == 3, otu_modules_fun$total, 0)
+otu_tab_mod_fun$Mod4 <- if_else(otu_modules_fun$modularity_class == 4, otu_modules_fun$total, 0)
+otu_tab_mod_fun$Mod5 <- if_else(otu_modules_fun$modularity_class == 5, otu_modules_fun$total, 0)
+otu_tab_mod_fun$Mod6 <- if_else(otu_modules_fun$modularity_class == 6, otu_modules_fun$total, 0)
+otu_tab_mod_fun$Mod7 <- if_else(otu_modules_fun$modularity_class == 7, otu_modules_fun$total, 0)
+
+# set the ASV name back to the rownames.
+rownames(otu_tab_mod_fun) <- otu_tab_mod_fun$Label
+otu_tab_mod_fun$Label <- NULL
+
+# Sum up the columns to obtain module total read counts.
+fungi_mod_rel <- as.data.frame(colSums(otu_tab_mod_fun))
+fungi_mod_rel
+
+##---------
+##  Combined  
+##-------------------------------------------------------------------------------------------------------
+
+# Set the ASV name back as a column.
+algae_mod_rel <- rownames_to_column(algae_mod_rel, var = 'Label')
+fungi_mod_rel <- rownames_to_column(fungi_mod_rel, var = 'Label')
+bacteria_mod_rel <- rownames_to_column(bacteria_mod_rel, var = 'Label')
+
+# Join the tables of the modules total read counts.
+modules_relative <- inner_join(algae_mod_rel, fungi_mod_rel) %>%
+  inner_join(bacteria_mod_rel)
+
+# Calculate the relative abundances per organismal group per module. 
+modules_relative_only <- modules_relative %>%
+  dplyr::rename(total_alg = "colSums(otu_tab_mod_alg)",
+         total_fun = "colSums(otu_tab_mod_fun)",
+         total_bac = "colSums(otu_tab_mod_bac)") %>%
+  mutate(relative_alg = total_alg / sum(algae_mod_rel$`colSums(otu_tab_mod_alg)`),
+         relative_fun = total_fun / sum(fungi_mod_rel$`colSums(otu_tab_mod_fun)`),
+         relative_bac = total_bac / sum(bacteria_mod_rel$`colSums(otu_tab_mod_bac)`)) %>%
+  select(Label, relative_alg, relative_fun, relative_bac) 
+
+# Set the module names as the rownames
+rownames(modules_relative_only) <- modules_relative_only$Label
+modules_relative_only$Label <- NULL
+
+# Calculate the modules relative abundance.
+
+sort(rowSums(modules_relative_only)/3, decreasing = T)
+
+# Top 2 are the most relevant modules. 
+# Module3 ~ 29 %
+# Module2 ~ 26 %
+
+####
+# Find out which orders are the top ones in the most important modules.
+####
+
+# Put ASV table as dataframe to ease handling.
+otu_full <- as.data.frame(otu_table(full_physeq))
+
+# Calculate the total ASV read counts. 
+otu_full$total <- rowSums(otu_full)
+
+# Subset to only contain the names and total read counts. 
+otu_full <- otu_full %>% 
+  select(total) %>%
+  rownames_to_column('Label')
+
+# Join the modules and ASV total read counts. 
+full_modules <- left_join(otu_full, modules)
+
+# Initiate an empty dataframe were we can store the total read counts per module.
+otu_tab_mod <- data.frame(Label = full_modules$Label,
+                          Mod0 = rep(0,1046),
+                          Mod1 = rep(0,1046),
+                          Mod2 = rep(0,1046),
+                          Mod3 = rep(0,1046),
+                          Mod4 = rep(0,1046),
+                          Mod5 = rep(0,1046),
+                          Mod6 = rep(0,1046),
+                          Mod7 = rep(0,1046))
+
+
+# If the ASV belongs to a module then write its read count, if not write zero. 
+otu_tab_mod$Mod0 <- if_else(full_modules$modularity_class == 0, full_modules$total, 0)
+otu_tab_mod$Mod1 <- if_else(full_modules$modularity_class == 1, full_modules$total, 0)
+otu_tab_mod$Mod2 <- if_else(full_modules$modularity_class == 2, full_modules$total, 0)
+otu_tab_mod$Mod3 <- if_else(full_modules$modularity_class == 3, full_modules$total, 0)
+otu_tab_mod$Mod4 <- if_else(full_modules$modularity_class == 4, full_modules$total, 0)
+otu_tab_mod$Mod5 <- if_else(full_modules$modularity_class == 5, full_modules$total, 0)
+otu_tab_mod$Mod6 <- if_else(full_modules$modularity_class == 6, full_modules$total, 0)
+otu_tab_mod$Mod7 <- if_else(full_modules$modularity_class == 7, full_modules$total, 0)
+
+# Set ASV names as rownames.
+rownames(otu_tab_mod) <- otu_tab_mod$Label
+otu_tab_mod$Label <- NULL
+
+# Create the phyloseq object to easily obtain the taxonomic information.
+otu_mat <- as.matrix(otu_tab_mod)
+tax_mat <- as.matrix(tax_table(full_physeq))
+
+OTU <- otu_table(otu_mat, taxa_are_rows = T)
+TAX <- tax_table(tax_mat)
+
+phy_modules <- phyloseq(OTU, TAX)
+
+# Aggregate on Order level.
+phy_modules_ord <- phy_modules %>%
+  aggregate_taxa('Order')
+
+# Subset by Module name.
+phy_mod0_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod0', phy_modules_ord)
+phy_mod1_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod1', phy_modules_ord)
+phy_mod2_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod2', phy_modules_ord)
+phy_mod3_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod3', phy_modules_ord)
+phy_mod4_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod4', phy_modules_ord)
+phy_mod5_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod5', phy_modules_ord)
+phy_mod6_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod6', phy_modules_ord)
+phy_mod7_ord <- prune_samples(sample_names(phy_modules_ord) == 'Mod7', phy_modules_ord)
+
+# Remove any taxa without reads.
+phy_mod0_ord_clean <- prune_taxa(taxa_sums(phy_mod0_ord) > 0, phy_mod0_ord)
+phy_mod1_ord_clean <- prune_taxa(taxa_sums(phy_mod1_ord) > 0, phy_mod1_ord)
+phy_mod2_ord_clean <- prune_taxa(taxa_sums(phy_mod2_ord) > 0, phy_mod2_ord)
+phy_mod3_ord_clean <- prune_taxa(taxa_sums(phy_mod3_ord) > 0, phy_mod3_ord)
+phy_mod4_ord_clean <- prune_taxa(taxa_sums(phy_mod4_ord) > 0, phy_mod4_ord)
+phy_mod5_ord_clean <- prune_taxa(taxa_sums(phy_mod5_ord) > 0, phy_mod5_ord)
+phy_mod6_ord_clean <- prune_taxa(taxa_sums(phy_mod6_ord) > 0, phy_mod6_ord)
+phy_mod7_ord_clean <- prune_taxa(taxa_sums(phy_mod7_ord) > 0, phy_mod7_ord)
+
+# Subset Module 2 by the organismal group.
+phy_mod2_ord_clean_alg <- subset_taxa(phy_mod2_ord_clean, Kingdom == 'Eukaryota')
+phy_mod2_ord_clean_bac <- subset_taxa(phy_mod2_ord_clean, Kingdom == 'Bacteria')
+phy_mod2_ord_clean_fun <- subset_taxa(phy_mod2_ord_clean, Kingdom == 'Fungi')
+
+# Relative abundance of algae, bacteria and fungi in the module.
+sum(abundances(phy_mod2_ord_clean_alg)) / sum(abundances(phy_mod2_ord_clean))
+sum(abundances(phy_mod2_ord_clean_bac)) / sum(abundances(phy_mod2_ord_clean))
+sum(abundances(phy_mod2_ord_clean_fun)) / sum(abundances(phy_mod2_ord_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 2. 
+top_alg_mod2 <- get_top_taxa(phy_mod2_ord_clean_alg, 1, discard_other = T)
+tax_table(top_alg_mod2)
+# Relative abundance within the module.
+abundances(top_alg_mod2) / sum(abundances(phy_mod2_ord_clean))
+# Relative abundance within algae in the module. 
+abundances(top_alg_mod2) / sum(abundances(phy_mod2_ord_clean_alg))
+
+top_bac_mod2 <- get_top_taxa(phy_mod2_ord_clean_bac, 1, discard_other = T)
+tax_table(top_bac_mod2)
+# Relative abundance within the module.
+abundances(top_bac_mod2) / sum(abundances(phy_mod2_ord_clean))
+# Relative abundance within bacteria in the module. 
+abundances(top_bac_mod2) / sum(abundances(phy_mod2_ord_clean_bac))
+
+top_fun_mod2 <- get_top_taxa(phy_mod2_ord_clean_fun, 1, discard_other = T)
+tax_table(top_fun_mod2)
+# Relative abundance within the module.
+abundances(top_fun_mod2) / sum(abundances(phy_mod2_ord_clean))
+# Relative abundance within fungi in the module. 
+abundances(top_fun_mod2) / sum(abundances(phy_mod2_ord_clean_fun))
+
+# Subset Module 3 by the organismal group.
+phy_mod3_ord_clean_alg <- subset_taxa(phy_mod3_ord_clean, Kingdom == 'Eukaryota')
+phy_mod3_ord_clean_bac <- subset_taxa(phy_mod3_ord_clean, Kingdom == 'Bacteria')
+phy_mod3_ord_clean_fun <- subset_taxa(phy_mod3_ord_clean, Kingdom == 'Fungi')
+
+# Relative abundance of algae, bacteria and fungi in the module.
+sum(abundances(phy_mod3_ord_clean_alg)) / sum(abundances(phy_mod3_ord_clean))
+sum(abundances(phy_mod3_ord_clean_bac)) / sum(abundances(phy_mod3_ord_clean))
+sum(abundances(phy_mod3_ord_clean_fun)) / sum(abundances(phy_mod3_ord_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for each organismal group within Module 3.
+top_alg_mod3 <- get_top_taxa(phy_mod3_ord_clean_alg, 1, discard_other = T)
+tax_table(top_alg_mod3)
+# Relative abundance within the module.
+abundances(top_alg_mod3) / sum(abundances(phy_mod3_ord_clean))
+# Relative abundance within algae in the module.
+abundances(top_alg_mod3) / sum(abundances(phy_mod3_ord_clean_alg))
+
+top_bac_mod3 <- get_top_taxa(phy_mod3_ord_clean_bac, 1, discard_other = T)
+tax_table(top_bac_mod3)
+# Relative abundance within the module.
+abundances(top_bac_mod3) / sum(abundances(phy_mod3_ord_clean))
+# Relative abundance within bacteria in the module.
+abundances(top_bac_mod3) / sum(abundances(phy_mod3_ord_clean_bac))
+
+top_fun_mod3 <- get_top_taxa(phy_mod3_ord_clean_fun, 1, discard_other = T)
+tax_table(top_fun_mod3)
+# Relative abundance within the module.
+abundances(top_fun_mod3) / sum(abundances(phy_mod3_ord_clean))
+# Relative abundance within fungi in the module.
+abundances(top_fun_mod3) / sum(abundances(phy_mod3_ord_clean_fun))
+
+####
+# Find out which taxa are the top ones in the modules.
+####
+
+# Subset by Module name.
+phy_mod0 <- prune_samples(sample_names(phy_modules) == 'Mod0', phy_modules)
+phy_mod1 <- prune_samples(sample_names(phy_modules) == 'Mod1', phy_modules)
+phy_mod2 <- prune_samples(sample_names(phy_modules) == 'Mod2', phy_modules)
+phy_mod3 <- prune_samples(sample_names(phy_modules) == 'Mod3', phy_modules)
+phy_mod4 <- prune_samples(sample_names(phy_modules) == 'Mod4', phy_modules)
+phy_mod5 <- prune_samples(sample_names(phy_modules) == 'Mod5', phy_modules)
+phy_mod6 <- prune_samples(sample_names(phy_modules) == 'Mod6', phy_modules)
+phy_mod7 <- prune_samples(sample_names(phy_modules) == 'Mod7', phy_modules)
+
+# Remove any taxa without reads.
+phy_mod0_clean <- prune_taxa(taxa_sums(phy_mod0) > 0, phy_mod0)
+phy_mod1_clean <- prune_taxa(taxa_sums(phy_mod1) > 0, phy_mod1)
+phy_mod2_clean <- prune_taxa(taxa_sums(phy_mod2) > 0, phy_mod2)
+phy_mod3_clean <- prune_taxa(taxa_sums(phy_mod3) > 0, phy_mod3)
+phy_mod4_clean <- prune_taxa(taxa_sums(phy_mod4) > 0, phy_mod4)
+phy_mod5_clean <- prune_taxa(taxa_sums(phy_mod5) > 0, phy_mod5)
+phy_mod6_clean <- prune_taxa(taxa_sums(phy_mod6) > 0, phy_mod6)
+phy_mod7_clean <- prune_taxa(taxa_sums(phy_mod7) > 0, phy_mod7)
+
+# Retrieve the top taxa, its taxonomy and relative abundance for Module 0. 
+top_mod0 <- get_top_taxa(phy_mod0_clean, 1, discard_other = T)
+tax_table(top_mod0)
+abundances(top_mod0) / sum(abundances(phy_mod0_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for Module 1. 
+top_mod1 <- get_top_taxa(phy_mod1_clean, 1, discard_other = T)
+tax_table(top_mod1)
+abundances(top_mod1) / sum(abundances(phy_mod1_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for Module 2. 
+top_mod2 <- get_top_taxa(phy_mod2_clean, 1, discard_other = T)
+tax_table(top_mod2)
+abundances(top_mod2) / sum(abundances(phy_mod2_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for Module 3. 
+top_mod3 <- get_top_taxa(phy_mod3_clean, 1, discard_other = T)
+tax_table(top_mod3)
+abundances(top_mod3) / sum(abundances(phy_mod3_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for Module 4. 
+top_mod4 <- get_top_taxa(phy_mod4_clean, 1, discard_other = T)
+tax_table(top_mod4)
+abundances(top_mod4) / sum(abundances(phy_mod4_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for Module 5. 
+top_mod5 <- get_top_taxa(phy_mod5_clean, 1, discard_other = T)
+tax_table(top_mod5)
+abundances(top_mod5) / sum(abundances(phy_mod5_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for Module 6. 
+top_mod6 <- get_top_taxa(phy_mod6_clean, 1, discard_other = T)
+tax_table(top_mod6)
+abundances(top_mod6) / sum(abundances(phy_mod6_clean))
+
+# Retrieve the top taxa, its taxonomy and relative abundance for Module 7. 
+top_mod7 <- get_top_taxa(phy_mod7_clean, 1, discard_other = T)
+tax_table(top_mod7)
+abundances(top_mod7) / sum(abundances(phy_mod7_clean))
 
 #################################################################
 ##                          Section 6                          ##
@@ -1956,7 +2708,7 @@ taxa_info_alg <- taxa_info_alg %>% rownames_to_column(var = "OTU")
 aldex2_ma_alg <- ALDEx2::aldex(data.frame(phyloseq::otu_table(phy_algae)),
                                phyloseq::sample_data(phy_algae)$intensity_formi,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -1990,7 +2742,7 @@ medium_small_alg <- prune_samples(sample_data(phy_algae)$size_cat %in% c("medium
 aldex2_bm_alg <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_medium_alg)),
                                phyloseq::sample_data(big_medium_alg)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2004,13 +2756,15 @@ sig_aldexbm_alg <- aldex2_bm_alg %>%
   dplyr::select(OTU,  wi.ep, wi.eBH) 
 sig_aldexbm_alg <- left_join(sig_aldexbm_alg, taxa_info_alg)
 
+sig_aldexbm_alg
+
 # Pair of big and small trees. 
 
 # Using the standard ALDEx2 modules.
 aldex2_bs_alg <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_small_alg)),
                                phyloseq::sample_data(big_small_alg)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2032,7 +2786,7 @@ sig_aldexbs_alg
 aldex2_ms_alg <- ALDEx2::aldex(data.frame(phyloseq::otu_table(medium_small_alg)),
                                phyloseq::sample_data(medium_small_alg)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2099,7 +2853,7 @@ medium_small_bac <- prune_samples(sample_data(phy_bacteria)$size_cat %in% c("med
 aldex2_bm_bac <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_medium_bac)),
                                phyloseq::sample_data(big_medium_bac)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2121,7 +2875,7 @@ sig_aldexbm_bac
 aldex2_bs_bac <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_small_bac)),
                                phyloseq::sample_data(big_small_bac)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2143,7 +2897,7 @@ sig_aldexbs_bac
 aldex2_ms_bac <- ALDEx2::aldex(data.frame(phyloseq::otu_table(medium_small_bac)),
                                phyloseq::sample_data(medium_small_bac)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2175,7 +2929,7 @@ taxa_info_fun <- taxa_info_fun %>% rownames_to_column(var = "OTU")
 aldex2_ma_fun <- ALDEx2::aldex(data.frame(phyloseq::otu_table(phy_fungi)),
                                phyloseq::sample_data(phy_fungi)$intensity_formi,
                                test="t",
-                               effect = FALSE,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2209,7 +2963,7 @@ medium_small_fun <- prune_samples(sample_data(phy_fungi)$size_cat %in% c("medium
 aldex2_bm_fun <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_medium_fun)),
                                phyloseq::sample_data(big_medium_fun)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2231,7 +2985,7 @@ sig_aldexbm_fun
 aldex2_bs_fun <- ALDEx2::aldex(data.frame(phyloseq::otu_table(big_small_fun)),
                                phyloseq::sample_data(big_small_fun)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2253,7 +3007,7 @@ sig_aldexbs_fun
 aldex2_ms_fun <- ALDEx2::aldex(data.frame(phyloseq::otu_table(medium_small_fun)),
                                phyloseq::sample_data(medium_small_fun)$size_cat,
                                test="t",
-                               effect = F,
+                               effect = T,
                                denom="all")
 
 # Plot to identify differentially abundant taxa. Red color potentially indicates differentially abundant taxa.
@@ -2296,7 +3050,7 @@ finished_barplots <- gridExtra::grid.arrange(grobs = barplots, nrow = 3, ncol = 
 
 # Save high quality figure.
 ggsave('community_barplots.tiff', device = 'tiff', finished_barplots, width = 180, height = 267,
-       units = 'mm', dpi = 700)
+       units = 'mm', dpi = 300)
 
 ##----------------------------------------------------------------
 ##                     Raincloud Plots                           -
@@ -2320,7 +3074,7 @@ rainclouds_finished <- gridExtra::grid.arrange(grobs = rainclouds, nrow = 2, nco
 
 # Save high quality figure.
 ggsave('alpha_diversity_rainclouds.tiff', device = 'tiff', rainclouds_finished, width = 180,
-       units = 'mm', dpi = 700)
+       units = 'mm', dpi = 300)
 
 ##----------------------------------------------------------------
 ##                     Ordination Plots                          -
@@ -2351,5 +3105,77 @@ ordinations_finished <- gridExtra::grid.arrange(grobs = ordinations, nrow = 2, n
 
 # Save high quality figure.
 ggplot2::ggsave('ordinations_2.tiff', device = "tiff", ordinations_finished, width = 180,
-                units = 'mm', dpi = 700)
+                units = 'mm', dpi = 300)
+
+
+#################################################################
+##                          Section 9                          ##
+##                  Export data for publication                ##
+#################################################################
+
+# Append the sequence information back to the phyloseq objects.
+
+###
+#Bacteria
+###
+bacteria_rep_seqs_new <- bacteria_rep_seqs
+base::rownames(bacteria_rep_seqs_new) <- bacteria_rep_seqs_new$seq_name_bacteria 
+bacteria_rep_seqs_new$seq_name_bacteria <- NULL
+seq_tax_bac_mat <- as.matrix(bacteria_rep_seqs_new)
+seq_tax_bac <- tax_table(seq_tax_bac_mat)
+
+phy_bac_complete <- phy_bacteria
+taxa_names(phy_bac_complete) <- gsub("ASV", "ASV_", taxa_names(phy_bac_complete))
+phy_bac_complete <- merge_phyloseq(phy_bac_complete, seq_tax_bac)
+colnames(tax_table(phy_bac_complete)) <- c("Kingdom", "Phylum", "Class", "Order", "Family",  "Genus", "Sequence")
+
+# Append the ending _B to the bacterial ASV names to indicate they are bacteria.
+taxa_names(phy_bac_complete) <- paste0(taxa_names(phy_bac_complete),'_B')
+
+###
+#Fungi
+###
+fungi_rep_seqs_new <- fungi_rep_seqs
+base::rownames(fungi_rep_seqs_new) <- fungi_rep_seqs_new$seq_name_fungi 
+fungi_rep_seqs_new$seq_name_fungi  <- NULL
+seq_tax_fun_mat <- as.matrix(fungi_rep_seqs_new)
+seq_tax_fun <- tax_table(seq_tax_fun_mat)
+
+phy_fun_complete <- phy_fungi
+phy_fun_complete <- merge_phyloseq(phy_fun_complete, seq_tax_fun)
+colnames(tax_table(phy_fun_complete)) <- c("Kingdom", "Phylum", "Class", "Order", "Family",  "Genus",  "Species", "Sequence")
+
+# Append the ending _F to the fungal ASV names to indicate they are bacteria.
+
+taxa_names(phy_fun_complete) <- paste0(taxa_names(phy_fun_complete),'_F')
+
+###
+#Algae
+###
+algae_rep_seqs_new <- algae_rep_seqs
+base::rownames(algae_rep_seqs_new) <- algae_rep_seqs_new$seq_name_algae 
+algae_rep_seqs_new$seq_name_algae   <- NULL
+seq_tax_alg_mat <- as.matrix(algae_rep_seqs_new)
+seq_tax_alg <- tax_table(seq_tax_alg_mat)
+
+phy_alg_complete <- phy_algae
+phy_alg_complete <- merge_phyloseq(phy_alg_complete, seq_tax_alg)
+colnames(tax_table(phy_alg_complete)) <- c("Kingdom", "Phylum", "Class", "Order", "Family",  "Genus", "Sequence")
+
+# Append the ending _A to the algal ASV names to indicate they are bacteria.
+
+taxa_names(phy_alg_complete) <- paste0(taxa_names(phy_alg_complete),'_A')
+
+# Merge them in one phyloseq object. 
+phy_complete <- merge_phyloseq(phy_alg_complete,
+                               phy_bac_complete,
+                               phy_fun_complete)
+
+
+# Transform the taxonomy table to a dataframe and make rownames the first column. 
+complete_taxonomy <- data.frame(tax_table(phy_complete)) %>%
+  tibble::rownames_to_column(var = "ASV_ID")
+
+write.csv(complete_taxonomy, "taxonomy_table_full.csv") 
+
 
