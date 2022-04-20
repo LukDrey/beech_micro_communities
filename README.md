@@ -54,3 +54,4 @@ If you lack the computing power to process the raw reads, the resulting ASV tabl
   - Biostrings https://bioconductor.org/packages/release/bioc/html/Biostrings.html
   - microbiome https://github.com/microbiome/microbiome
   - paletteer https://github.com/EmilHvitfeldt/paletteer
+  - fantaxtic https://github.com/gmteunisse/Fantaxtic
