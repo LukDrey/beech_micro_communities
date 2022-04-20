@@ -21,7 +21,7 @@ Principal Investigator
 
 1. [Pre-Processing Pipeline](01_processing_pipeline.txt)
 2. [Data](02_Data.zip)
-3. [Analysis_Script](03_beech_micro_communities.R)
+3. [Analysis Script](03_beech_micro_communities.R)
 
 Additionally you need to download the raw reads [here](XXXXXXXXXXXXX).  
 
