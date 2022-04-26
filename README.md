@@ -25,7 +25,7 @@ Principal Investigator
 2. [Data](02_Data.zip)
 3. [Analysis Script](03_beech_micro_communities.R)
 
-Additionally you need to download the raw reads [here](XXXXXXXXXXXXX).  
+Additionally you need to download the raw reads [here](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA819266).  
 
 If you lack the computing power to process the raw reads, the resulting ASV tables, FASTA files, taxonomy table and metadata are located [here](02_Data.zip).  
 
