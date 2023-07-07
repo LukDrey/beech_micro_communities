@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/477644784.svg)](https://zenodo.org/badge/latestdoi/477644784)
+
 # Tree size drives diversity and community structure of microbial communities on the bark of beech (Fagus sylvatica)
 ![networks](https://github.com/LukDrey/beech_micro_communities/blob/main/combined_network.png)
 
@@ -28,7 +30,7 @@ Principal Investigator
 Additionally you need to download the raw reads [here](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA819266).  
 
 If you lack the computing power to process the raw reads, the resulting ASV tables, FASTA files, taxonomy table and metadata are located [here](02_Data.zip).  
-
+An archived version is available through Zenodo. [![DOI](https://zenodo.org/badge/477644784.svg)](https://zenodo.org/badge/latestdoi/477644784)
 ## Before starting
 
 ### You will need to have the following software installed.
